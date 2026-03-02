@@ -42,22 +42,17 @@ export default function Sidebar() {
     { name: 'Settings', path: '/recruiter/settings', icon: Settings },
   ];
 
-<<<<<<< HEAD
-  const links = userRole === 'admin' ? adminLinks : recruiterLinks;
-=======
-  // 🔴 FIXED: Determine which links to show based on exact role
+  // Determine which links to show based on exact role
   let links = [];
   if (userRole === 'admin') {
     links = adminLinks;
   } else if (userRole === 'manager') {
-    // Show admin links but hide Client Info and Invoices
     links = adminLinks.filter(
       (link) => link.name !== 'Client Info' && link.name !== 'Invoices'
     );
   } else {
     links = recruiterLinks;
   }
->>>>>>> 8e390de68b83837061f8ab7411eb74814c96ebab
 
   return (
     <div className={clsx("flex flex-col h-screen fixed left-0 top-0 z-50 shadow-2xl w-80", sidebarBg)}>
@@ -77,14 +72,8 @@ export default function Sidebar() {
       {/* --- User Profile Card --- */}
       <div className="mb-8 px-6">
         <div className="bg-[#3d4692] rounded-2xl p-4 flex items-center gap-4 overflow-hidden shadow-inner border border-white/5">
-<<<<<<< HEAD
-          <div className="w-12 h-12 rounded-full border-2 border-white/20 flex-shrink-0 overflow-hidden bg-gray-200">
-             <img src="https://github.com/shadcn.png" alt="User" className="w-full h-full object-cover" />
-=======
           <div className="w-12 h-12 rounded-full border-2 border-white/20 flex-shrink-0 overflow-hidden bg-gray-200 flex items-center justify-center">
-             {/* Fallback to User icon if no image available */}
              <User className="h-6 w-6 text-gray-500" />
->>>>>>> 8e390de68b83837061f8ab7411eb74814c96ebab
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-bold text-white truncate">{currentUser?.email || 'admin@vts.com'}</p>
@@ -94,16 +83,16 @@ export default function Sidebar() {
       </div>
 
       {/* --- Navigation Links --- */}
-      {/* [&::-webkit-scrollbar]:hidden hides the scrollbar explicitly */}
       <div className="flex-1 overflow-y-auto space-y-2 py-2 pl-6 pr-0 [&::-webkit-scrollbar]:hidden">
         {links.map((link) => (
           <NavLink
             key={link.path}
             to={link.path}
             end={link.path === '/admin' || link.path === '/recruiter'}
+            // UPDATED: Changed py-5 to py-4 for slightly tighter spacing
             className={({ isActive }) =>
               clsx(
-                "group flex items-center relative transition-all duration-200 py-5 pl-8",
+                "group flex items-center relative transition-all duration-200 py-4 pl-8",
                 isActive 
                   ? `${activeBgClass} ${activeTextClass} rounded-l-[50px] rounded-r-none`
                   : `${inactiveTextClass} rounded-l-[50px]`
@@ -133,13 +122,15 @@ export default function Sidebar() {
                 )}
 
                 <div className="flex items-center gap-5 z-20 relative w-full">
+                  {/* UPDATED: Changed h-6 w-6 to h-5 w-5 (20px) */}
                   <link.icon 
                     className={clsx(
-                      "h-6 w-6 flex-shrink-0 transition-transform duration-300", 
+                      "h-5 w-5 flex-shrink-0 transition-transform duration-300", 
                       isActive ? "scale-110 stroke-[3px]" : "group-hover:scale-110 stroke-[2.5px]"
                     )} 
                   />
-                  <span className="text-[17px] tracking-wide">{link.name}</span>
+                  {/* UPDATED: Changed text-[17px] to text-[15px] */}
+                  <span className="text-[15px] tracking-wide">{link.name}</span>
                 </div>
               </>
             )}
@@ -153,8 +144,10 @@ export default function Sidebar() {
           onClick={logout} 
           className="flex items-center gap-4 w-full px-6 py-4 bg-red-600 text-white hover:bg-red-700 transition-all rounded-2xl shadow-lg group"
         >
-          <Power className="h-6 w-6 group-hover:scale-110 transition-transform stroke-[3px]" />
-          <span className="font-extrabold tracking-wide text-base">Sign Out</span>
+          {/* UPDATED: Icon size h-5 w-5 */}
+          <Power className="h-5 w-5 group-hover:scale-110 transition-transform stroke-[3px]" />
+          {/* UPDATED: Text size text-[15px] */}
+          <span className="font-extrabold tracking-wide text-[15px]">Sign Out</span>
         </button>
       </div>
     </div>
