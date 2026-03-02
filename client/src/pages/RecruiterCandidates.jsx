@@ -228,10 +228,26 @@ export default function RecruiterCandidates() {
       const headers = { ...authH };
 
       // 🔴 CHECK ROLE: If Manager or Recruiter, fetch "My Candidates". Otherwise fetch All.
-      // (Assuming your backend has a /candidates/my endpoint that filters by logged-in user ID)
-      const candidateEndpoint = (userRole === 'recruiter' || userRole === 'manager') 
-        ? `${API_URL}/candidates/my` 
-        : `${API_URL}/candidates`;
+      // NOTE: Your backend MUST have a `/candidates/my` route for this to work.
+      // If your backend only has GET /candidates with a query param, adjust the URL below.
+      // For now, assuming you have separate endpoints or logic.
+      
+      let candidateEndpoint = `${API_URL}/candidates`;
+      
+      // If user is recruiter OR manager, fetch strictly "my" candidates
+      if (userRole === 'recruiter' || userRole === 'manager') {
+        // Backend usually handles this by checking req.user in the /candidates endpoint 
+        // OR by having a specific /my route. 
+        // Assuming your backend supports /candidates?view=my or similar filter logic
+        // OR simply filtering inside the GET /candidates logic on the backend.
+        
+        // IF YOUR BACKEND IS ALREADY FILTERING BASED ON ROLE for GET /candidates:
+        candidateEndpoint = `${API_URL}/candidates`; 
+        
+        // IF YOU EXPLICITLY WANT TO FORCE "MY CANDIDATES" logic:
+        // You might need to pass a query param if the backend supports it.
+        // candidateEndpoint = `${API_URL}/candidates?filter=my`;
+      }
 
       const [candRes, jobRes, clientRes] = await Promise.all([
         fetch(candidateEndpoint, { headers }),
@@ -244,8 +260,22 @@ export default function RecruiterCandidates() {
         const allJobs = await jobRes.json();
         const allClients = await clientRes.json();
 
-        allCandidates.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        const fixedCandidates = allCandidates.map((c) => ({
+        // 🔴 CLIENT-SIDE FILTERING (Fallback safety)
+        // If the backend returns everyone but we are a manager/recruiter, 
+        // filter by the current user's ID just in case.
+        let finalCandidates = allCandidates;
+        
+        if ((userRole === 'manager' || userRole === 'recruiter') && currentUser?._id) {
+           finalCandidates = allCandidates.filter(c => {
+             // Check against recruiterId object or string
+             const cRecruiterId = typeof c.recruiterId === 'object' ? c.recruiterId._id : c.recruiterId;
+             return cRecruiterId === currentUser._id;
+           });
+        }
+
+        finalCandidates.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        
+        const fixedCandidates = finalCandidates.map((c) => ({
           ...c,
           status: Array.isArray(c.status) ? c.status : [c.status || 'Submitted']
         }));
@@ -685,7 +715,8 @@ export default function RecruiterCandidates() {
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
               <h1 className="text-3xl font-bold">
-                {userRole === 'admin' ? 'My Candidates (Admin View)' : 'My Candidates'}
+                {/* Dynamically Show correct title */}
+                {(userRole === 'admin' || userRole === 'manager') ? 'My Candidates (Personal View)' : 'My Candidates'}
               </h1>
               <p className="text-slate-500">Manage pipeline</p>
             </div>

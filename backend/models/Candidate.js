@@ -1,3 +1,4 @@
+// --- START OF FILE Candidate.js ---
 import mongoose from 'mongoose';
 
 const candidateSchema = mongoose.Schema({
@@ -68,31 +69,15 @@ const candidateSchema = mongoose.Schema({
   timestamps: true,
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Pre-save hook
-//
-// FIX for E11000 duplicate key on candidateId:
-//
-//   ROOT CAUSE: Two concurrent saves both query for "last VTS record",
-//   get the same number back (the other save isn't committed yet),
-//   and both try to insert the same VTS ID → duplicate key crash.
-//
-//   SOLUTION: Use findOneAndUpdate with $inc on a separate counter
-//   document (atomic operation) OR use MongoDB aggregation MAX + retry.
-//   We use the atomic counter approach — it's race-condition-proof.
-//
-//   We store a counter in a separate "counters" collection.
-//   Each call does: findOneAndUpdate({ _id: 'candidate' }, { $inc: { seq: 1 } }, { upsert: true, new: true })
-//   This is atomic in MongoDB — no two calls ever get the same number.
-// ─────────────────────────────────────────────────────────────────────────────
-
 // Minimal counter schema (stored in 'counters' collection)
 const counterSchema = new mongoose.Schema({
   _id:  { type: String, required: true },
   seq:  { type: Number, default: 0 },
 });
-// Only register if not already registered
 const Counter = mongoose.models.Counter || mongoose.model('Counter', counterSchema);
+
+// A local flag so we only do the "sync" query once per server startup, preventing performance drops
+let isCounterSynced = false;
 
 candidateSchema.pre('save', async function (next) {
   // Always sync name from firstName + lastName
@@ -104,7 +89,33 @@ candidateSchema.pre('save', async function (next) {
   if (!this.isNew || this.candidateId) return next();
 
   try {
-    // Atomic increment — guaranteed unique, race-condition-proof
+    // 1. Auto-healing step: Sync the counter with the highest existing ID
+    if (!isCounterSynced) {
+      // Find the currently highest candidateId starting with "VTS"
+      const highestCandidate = await this.constructor
+        .findOne({ candidateId: { $regex: /^VTS/ } }, { candidateId: 1 })
+        .sort({ candidateId: -1 });
+
+      let maxSeq = 0;
+      if (highestCandidate && highestCandidate.candidateId) {
+        // Extract the number part: "VTS0000044" -> 44
+        const match = highestCandidate.candidateId.match(/^VTS0*(\d+)$/);
+        if (match) {
+          maxSeq = parseInt(match[1], 10);
+        }
+      }
+
+      // $max atomically sets the counter to maxSeq ONLY if maxSeq is greater than the current seq
+      await Counter.updateOne(
+        { _id: 'candidate' },
+        { $max: { seq: maxSeq } },
+        { upsert: true }
+      );
+
+      isCounterSynced = true; // Don't run this check again while the server stays alive
+    }
+
+    // 2. Atomic increment — guaranteed unique, race-condition-proof
     const counter = await Counter.findOneAndUpdate(
       { _id: 'candidate' },
       { $inc: { seq: 1 } },
@@ -119,5 +130,5 @@ candidateSchema.pre('save', async function (next) {
   }
 });
 
-const Candidate = mongoose.model('Candidate', candidateSchema);
+const Candidate = mongoose.models.Candidate || mongoose.model('Candidate', candidateSchema);
 export default Candidate;
