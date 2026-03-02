@@ -11,6 +11,9 @@ import {
   PlusIcon,
   CheckCircleIcon,
   NoSymbolIcon,
+  MapPinIcon, // Added Icon
+  CurrencyDollarIcon, // Added Icon
+  ClockIcon // Added Icon
 } from "@heroicons/react/24/outline";
 
 const BASE_URL = (import.meta.env.VITE_API_URL || "http://localhost:5000").replace(/\/$/, '');
@@ -47,6 +50,8 @@ const ClientDetailCard = ({ client, onClose }) => {
                     {client.clientId}
                   </span>
                   {client.industry && <span>• {client.industry}</span>}
+                  {/* Added Location in Header */}
+                  {client.clientLocation && <span>• {client.clientLocation}</span>}
                 </div>
               </div>
               <button
@@ -70,6 +75,7 @@ const ClientDetailCard = ({ client, onClose }) => {
                   <p className="flex justify-between"><span className="text-zinc-500">Email:</span> <span className="font-medium">{client.email || "-"}</span></p>
                   <p className="flex justify-between"><span className="text-zinc-500">Phone:</span> <span className="font-medium">{client.phone || "-"}</span></p>
                   <p className="flex justify-between"><span className="text-zinc-500">Website:</span> <span className="font-medium">{client.website || "-"}</span></p>
+                  <p className="flex justify-between"><span className="text-zinc-500">Location:</span> <span className="font-medium">{client.clientLocation || "-"}</span></p>
                   <div className="pt-2"><span className="text-zinc-500 block mb-1">Address:</span> <p className="font-medium text-xs leading-relaxed">{client.address || "-"}</p></div>
                 </div>
               </div>
@@ -83,6 +89,11 @@ const ClientDetailCard = ({ client, onClose }) => {
                   <p className="flex justify-between"><span className="text-zinc-500">Commission Rate:</span> <span className="font-medium">{client.percentage ? `${client.percentage}%` : "-"}</span></p>
                   <p className="flex justify-between"><span className="text-zinc-500">Candidate Period:</span> <span className="font-medium">{client.candidatePeriod ? `${client.candidatePeriod} months` : "-"}</span></p>
                   <p className="flex justify-between"><span className="text-zinc-500">Replacement:</span> <span className="font-medium">{client.replacementPeriod ? `${client.replacementPeriod} days` : "-"}</span></p>
+                  
+                  {/* NEW FIELDS IN DETAIL CARD */}
+                  <p className="flex justify-between"><span className="text-zinc-500">Locking Period:</span> <span className="font-medium">{client.lockingPeriod || "-"}</span></p>
+                  <p className="flex justify-between"><span className="text-zinc-500">Payment Mode:</span> <span className="font-medium">{client.paymentMode || "-"}</span></p>
+                  
                   <p className="flex justify-between"><span className="text-zinc-500">GST Number:</span> <span className="font-medium font-mono text-xs">{client.gstNumber || "-"}</span></p>
                   <p className="flex justify-between"><span className="text-zinc-500">Status:</span>
                     <span className={`px-2 py-0.5 rounded text-xs font-medium ${client.active ? 'bg-zinc-200 text-zinc-800 dark:bg-zinc-700 dark:text-zinc-200' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
@@ -111,7 +122,6 @@ export default function AdminClientInfo() {
   const { toast } = useToast();
   const { authHeaders } = useAuth();
 
-  // ── Auth helper — reads Firebase idToken from AuthContext (stored in sessionStorage as 'currentUser')
   const getAuthHeader = async () => ({
     "Content-Type": "application/json",
     ...(await authHeaders()),
@@ -128,10 +138,12 @@ export default function AdminClientInfo() {
   const [selectedClient, setSelectedClient] = useState(null);
   const [errors, setErrors] = useState({});
 
+  // ADDED NEW FIELDS TO INITIAL STATE
   const initialFormState = {
     companyName: "", contactPerson: "", email: "", phone: "", website: "",
     address: "", locationLink: "", industry: "", gstNumber: "", notes: "",
     clientId: "", percentage: "", candidatePeriod: "", replacementPeriod: "",
+    lockingPeriod: "", paymentMode: "", clientLocation: "", // New Fields
     terms: "", active: true,
   };
   const [form, setForm] = useState(initialFormState);
@@ -203,6 +215,9 @@ export default function AdminClientInfo() {
       percentage: client.percentage?.toString() || "",
       candidatePeriod: client.candidatePeriod?.toString() || "",
       replacementPeriod: client.replacementPeriod?.toString() || "",
+      lockingPeriod: client.lockingPeriod || "", // Handle new field
+      paymentMode: client.paymentMode || "", // Handle new field
+      clientLocation: client.clientLocation || "", // Handle new field
       active: client.active !== false,
     });
     setShowForm(true);
@@ -282,6 +297,22 @@ export default function AdminClientInfo() {
               <label className="block text-xs font-medium text-zinc-500 mb-1">Industry</label>
               <input name="industry" value={form.industry} onChange={handleChange} className={inputCls} />
             </div>
+            
+            {/* --- ADDED NEW FIELDS HERE --- */}
+            <div>
+              <label className="block text-xs font-medium text-zinc-500 mb-1">Client Location</label>
+              <input name="clientLocation" value={form.clientLocation} onChange={handleChange} placeholder="City, State" className={inputCls} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-zinc-500 mb-1">Locking Period</label>
+              <input name="lockingPeriod" value={form.lockingPeriod} onChange={handleChange} placeholder="e.g. 30 Days" className={inputCls} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-zinc-500 mb-1">Payment Mode</label>
+              <input name="paymentMode" value={form.paymentMode} onChange={handleChange} placeholder="e.g. Net-30" className={inputCls} />
+            </div>
+             {/* ----------------------------- */}
+
             <div>
               <label className="block text-xs font-medium text-zinc-500 mb-1">Commission %</label>
               <input name="percentage" value={form.percentage} onChange={handleChange} className={`${inputCls} ${errors.percentage ? 'border-red-500' : ''}`} />
@@ -328,10 +359,11 @@ export default function AdminClientInfo() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left whitespace-nowrap">
               <thead className="bg-zinc-50 dark:bg-zinc-900/50 text-xs uppercase text-zinc-500 border-b border-zinc-200 dark:border-zinc-800">
+                {/* --- MODIFIED TABLE HEADERS --- */}
                 <tr>
                   <th className="px-6 py-4 font-medium tracking-wider">Client</th>
                   <th className="px-6 py-4 font-medium tracking-wider">Contact</th>
-                  <th className="px-6 py-4 font-medium tracking-wider">Terms</th>
+                  <th className="px-6 py-4 font-medium tracking-wider">Email</th> {/* Replaced Terms with Email */}
                   <th className="px-6 py-4 font-medium tracking-wider">Status</th>
                   <th className="px-6 py-4 font-medium tracking-wider text-right">Actions</th>
                 </tr>
@@ -347,11 +379,14 @@ export default function AdminClientInfo() {
                     </td>
                     <td className="px-6 py-4">
                       <div className="text-zinc-800 dark:text-zinc-300">{client.contactPerson || "-"}</div>
-                      <div className="text-xs text-zinc-500 mt-0.5">{client.email || "-"}</div>
+                      <div className="text-xs text-zinc-500 mt-0.5">{client.phone || "-"}</div>
                     </td>
+                    
+                    {/* --- REPLACED TERMS COLUMN WITH EMAIL --- */}
                     <td className="px-6 py-4 text-zinc-600 dark:text-zinc-400">
-                      {client.percentage ? `${client.percentage}% Comm.` : "-"}
+                      {client.email || "-"}
                     </td>
+
                     <td className="px-6 py-4">
                       <span className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-medium border ${client.active !== false
                           ? "bg-zinc-100 text-zinc-700 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700"

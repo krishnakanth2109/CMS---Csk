@@ -1,31 +1,42 @@
 import mongoose from 'mongoose';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// User Model — Firebase owns authentication (passwords/tokens).
+// User Model
+// Firebase owns authentication (passwords/tokens).
 // MongoDB stores profile data + firebaseUid for lookup.
-// All required validations removed as requested.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const userSchema = new mongoose.Schema(
   {
-    // 🔹 Firebase UID
+    // 🔹 Firebase UID (Link between Firebase and MongoDB)
     firebaseUid: {
       type: String,
       unique: true,
-      sparse: true,
+      sparse: true, // Allows null/missing values while maintaining uniqueness
     },
 
+    // 🔹 Custom ID for Recruiters (Optional)
     recruiterId: {
       type: String,
       unique: true,
       sparse: true,
     },
 
-    // 🔹 Basic Information (No required fields now)
-    firstName: { type: String },
-    lastName:  { type: String },
-    username:  { type: String },
-
+    // 🔹 Basic Information
+    firstName: { 
+      type: String,
+      trim: true 
+    },
+    lastName: { 
+      type: String, 
+      trim: true 
+    },
+    username: { 
+      type: String,
+      unique: true,
+      sparse: true,
+      trim: true 
+    },
     email: {
       type: String,
       unique: true,
@@ -33,39 +44,50 @@ const userSchema = new mongoose.Schema(
       trim: true,
     },
 
-    // 🔹 Legacy password (optional)
-    password: { type: String },
+    // 🔹 Profile Image (Stores Base64 string or URL)
+    profilePicture: { 
+      type: String,
+      default: "" 
+    },
 
-    phone: { type: String },
+    phone: { 
+      type: String 
+    },
 
-    // 🔹 Role (manager still not included unless you want it)
+    // 🔹 Role Management
     role: {
       type: String,
-      enum: ['admin', 'recruiter', 'manager'], // Add 'manager' here if needed
+      enum: ['admin', 'recruiter', 'manager'],
       default: 'recruiter',
     },
 
-    profilePicture: { type: String },
-
+    // 🔹 Account Status
     active: {
       type: Boolean,
       default: true,
     },
 
-    // 🔹 Extended Profile
+    // 🔹 Extended Profile Details
     location: { type: String },
     specialization: { type: String },
     experience: { type: String },
     bio: { type: String },
 
+    // 🔹 Social Links
     socials: {
       linkedin: String,
       github: String,
       twitter: String,
       website: String,
     },
+
+    // 🔹 Legacy/Internal Password (Optional, Firebase is primary)
+    password: { 
+      type: String 
+    },
   },
   {
+    // Automatically creates 'createdAt' and 'updatedAt' fields
     timestamps: true,
   }
 );

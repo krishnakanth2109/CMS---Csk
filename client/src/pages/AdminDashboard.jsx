@@ -296,7 +296,7 @@ export default function AdminDashboard() {
         {/* Average Time of Hire */}
         <div className="bg-white p-8 rounded-[1.5rem] shadow-sm border border-gray-100 flex items-center justify-between">
           <div className="flex-1">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Average Time of Hire</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Avg. Time of Hire</p>
             <h3 className="text-4xl font-bold text-slate-800 mt-2">0.0%</h3>
             <div className="w-full h-2 bg-gray-100 rounded-full mt-6">
               <div className="h-full bg-[#283086] rounded-full w-[30%]"></div>

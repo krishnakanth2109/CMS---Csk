@@ -1,252 +1,156 @@
 import User from '../models/User.js';
 import { admin } from '../middleware/authMiddleware.js';
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Helper: derive a display "name" from User document.
-// User.js stores firstName + lastName (both required), not a single "name".
-// All controllers use this helper to return a consistent name string.
-// ─────────────────────────────────────────────────────────────────────────────
 const fullName = (user) =>
   [user.firstName, user.lastName].filter(Boolean).join(' ') || user.username || user.email;
 
-// @desc    Login user — verifies Firebase ID token sent from frontend
+// @desc    Login user
 // @route   POST /api/auth/login
-// @access  Public
 export const loginUser = async (req, res) => {
   const { idToken } = req.body;
-
-  if (!idToken) {
-    return res.status(400).json({ message: 'Firebase ID token is required.' });
-  }
+  if (!idToken) return res.status(400).json({ message: 'Firebase ID token is required.' });
 
   try {
-    // Verify Firebase ID token using Admin SDK
     const decodedToken = await admin.auth().verifyIdToken(idToken);
     const { uid, email } = decodedToken;
 
-    // Find user in MongoDB by Firebase UID or email
     let user = await User.findOne({ $or: [{ firebaseUid: uid }, { email }] });
+    if (!user) return res.status(401).json({ message: 'User not registered. Contact admin.' });
+    if (user.active === false) return res.status(401).json({ message: 'Account deactivated.' });
 
-    if (!user) {
-      return res.status(401).json({ message: 'User not registered in the system. Contact admin.' });
-    }
-
-    if (user.active === false) {
-      return res.status(401).json({ message: 'Account is deactivated. Contact admin.' });
-    }
-
-    // Sync Firebase UID if not already stored
     if (!user.firebaseUid) {
       user.firebaseUid = uid;
       await user.save();
     }
 
-    // FIX: User model uses firstName + lastName, not a single "name" field.
-    // Return both raw fields AND a computed "name" so the frontend works
-    // regardless of which field it reads.
     res.json({
-      _id:        user._id,
-      name:       fullName(user),          // computed for frontend compatibility
-      firstName:  user.firstName,
-      lastName:   user.lastName,
-      email:      user.email,
-      username:   user.username,
-      role:       user.role,
+      _id: user._id,
+      name: fullName(user),
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      username: user.username,
+      role: user.role,
+      profilePicture: user.profilePicture || "", // Return image
       firebaseUid: user.firebaseUid,
       recruiterId: user.recruiterId,
     });
   } catch (error) {
-    console.error('Login Error:', error.message);
-
-    if (error.code === 'auth/id-token-expired') {
-      return res.status(401).json({ message: 'Session expired. Please login again.' });
-    }
-    if (error.code === 'auth/argument-error' || error.code === 'auth/invalid-id-token') {
-      return res.status(401).json({ message: 'Invalid token. Please login again.' });
-    }
-
     res.status(500).json({ message: 'Server error during login.' });
   }
 };
 
-// @desc    Register a new user (admin creates users, stores in DB + Firebase)
+// @desc    Register user
 // @route   POST /api/auth/register
-// @access  Public (or protect with admin middleware if needed)
 export const registerUser = async (req, res) => {
-  // FIX: Accept both { firstName, lastName } and legacy { name } from request body.
-  // User.js requires firstName and lastName separately — a plain "name" field
-  // would cause a Mongoose ValidationError and a 500 crash.
-  const { email, password, firstName, lastName, name, username, role } = req.body;
-
-  // Derive firstName / lastName from legacy "name" if the new fields are absent
+  const { email, password, firstName, lastName, name, username, role, profilePicture } = req.body;
   let fName = firstName;
   let lName = lastName;
   if (!fName && name) {
     const parts = name.trim().split(/\s+/);
     fName = parts[0];
-    lName = parts.slice(1).join(' ') || parts[0]; // fallback: repeat first name
-  }
-
-  if (!email || !password || !fName) {
-    return res.status(400).json({ message: 'Email, password, and first name are required.' });
+    lName = parts.slice(1).join(' ') || parts[0];
   }
 
   try {
-    // Check if user already exists in DB
-    const existingUser = await User.findOne({ $or: [{ email }, ...(username ? [{ username }] : [])] });
-    if (existingUser) {
-      return res.status(400).json({ message: 'User with this email or username already exists.' });
-    }
-
-    // Create user in Firebase Auth via Admin SDK
     const firebaseUser = await admin.auth().createUser({
-      email,
-      password,
-      displayName: [fName, lName].filter(Boolean).join(' '),
+      email, password, displayName: [fName, lName].filter(Boolean).join(' ')
     });
 
-    // Create user in MongoDB
     const user = await User.create({
       firebaseUid: firebaseUser.uid,
-      email,
-      firstName: fName,
-      lastName:  lName || '',
-      username:  username || email.split('@')[0],
-      role:      role || 'recruiter',
-      active:    true,
+      email, firstName: fName, lastName: lName || '',
+      username: username || email.split('@')[0],
+      role: role || 'recruiter',
+      profilePicture: profilePicture || "", // Save image
+      active: true,
     });
 
-    res.status(201).json({
-      _id:       user._id,
-      name:      fullName(user),
-      firstName: user.firstName,
-      lastName:  user.lastName,
-      email:     user.email,
-      username:  user.username,
-      role:      user.role,
-      firebaseUid: user.firebaseUid,
-    });
+    res.status(201).json({ _id: user._id, name: fullName(user), email: user.email, profilePicture: user.profilePicture });
   } catch (error) {
-    console.error('Register Error:', error);
-
-    if (error.code === 'auth/email-already-exists') {
-      return res.status(400).json({ message: 'Email already registered in Firebase.' });
-    }
-    if (error.code === 'auth/weak-password') {
-      return res.status(400).json({ message: 'Password must be at least 6 characters.' });
-    }
-
-    res.status(500).json({ message: error.message || 'Server error during registration.' });
+    res.status(500).json({ message: error.message });
   }
 };
 
 // @desc    Get user profile
 // @route   GET /api/auth/profile
-// @access  Private
 export const getUserProfile = async (req, res) => {
   try {
     if (req.user) {
       res.json({
-        _id:       req.user._id,
-        username:  req.user.username,
-        name:      fullName(req.user),
+        _id: req.user._id,
+        username: req.user.username,
+        name: fullName(req.user),
         firstName: req.user.firstName,
-        lastName:  req.user.lastName,
-        email:     req.user.email,
-        role:      req.user.role,
+        lastName: req.user.lastName,
+        email: req.user.email,
+        role: req.user.role,
+        profilePicture: req.user.profilePicture || "", // Return image
         firebaseUid: req.user.firebaseUid,
-        recruiterId: req.user.recruiterId,
       });
     } else {
       res.status(404).json({ message: 'User not found.' });
     }
   } catch (error) {
-    console.error('Get Profile Error:', error);
     res.status(500).json({ message: 'Server error fetching profile.' });
   }
 };
 
-// @desc    Update user profile
+// @desc    Update user profile (Handles Image Edit & Remove)
 // @route   PUT /api/auth/profile
-// @access  Private
+// REPLACE your updateUserProfile function with this:
 export const updateUserProfile = async (req, res) => {
   try {
+    // 1. Find user by ID (from protect middleware)
     const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ message: 'User not found.' });
 
-    if (!user) {
-      return res.status(404).json({ message: 'User not found.' });
+    // 2. Handle Name Splitting (Full Name -> First & Last)
+    if (req.body.name) {
+      const nameParts = req.body.name.trim().split(/\s+/);
+      user.firstName = nameParts[0];
+      user.lastName = nameParts.slice(1).join(' ') || ""; // Handles single names or multiple middle names
     }
 
-    // FIX: Support updating firstName/lastName individually, or via legacy "name"
-    if (req.body.firstName) user.firstName = req.body.firstName;
-    if (req.body.lastName)  user.lastName  = req.body.lastName;
-    if (req.body.name && !req.body.firstName) {
-      const parts = req.body.name.trim().split(/\s+/);
-      user.firstName = parts[0];
-      user.lastName  = parts.slice(1).join(' ') || user.lastName;
-    }
-    if (req.body.email) user.email = req.body.email;
-
-    // If password update requested, update in Firebase too
-    if (req.body.password && req.body.password.trim() !== '') {
-      await admin.auth().updateUser(user.firebaseUid, {
-        password: req.body.password,
-      });
+    // 3. Handle Email (Optional: Syncing email to Firebase is complex, 
+    // usually we keep the original login email and just update profile email)
+    if (req.body.email) {
+      user.email = req.body.email;
     }
 
+    // 4. Handle Profile Picture
+    if (req.body.profilePicture !== undefined) {
+      user.profilePicture = req.body.profilePicture;
+    }
+
+    // 5. Save to MongoDB
     const updatedUser = await user.save();
 
+    // 6. Return the EXACT object the frontend needs
     res.json({
-      _id:       updatedUser._id,
-      username:  updatedUser.username,
-      name:      fullName(updatedUser),
+      _id: updatedUser._id,
       firstName: updatedUser.firstName,
-      lastName:  updatedUser.lastName,
-      email:     updatedUser.email,
-      role:      updatedUser.role,
+      lastName: updatedUser.lastName,
+      name: [updatedUser.firstName, updatedUser.lastName].filter(Boolean).join(' '),
+      email: updatedUser.email,
+      username: updatedUser.username,
+      profilePicture: updatedUser.profilePicture || "",
+      role: updatedUser.role,
     });
   } catch (error) {
     console.error('Update Profile Error:', error);
-
-    if (error.code === 11000) {
-      return res.status(400).json({ message: 'Email or Username already in use.' });
-    }
-    if (error.name === 'ValidationError') {
-      return res.status(400).json({ message: error.message });
-    }
-
-    res.status(500).json({ message: error.message || 'Server Error.' });
+    res.status(500).json({ message: error.message || 'Server Error updating profile.' });
   }
 };
 
-// @desc    Send password reset email via Firebase Admin
-// @route   POST /api/auth/forgot-password
-// @access  Public
 export const forgotPassword = async (req, res) => {
   const { email } = req.body;
-
-  if (!email) {
-    return res.status(400).json({ message: 'Email is required.' });
-  }
-
   try {
-    // Check if user exists in DB first
     const user = await User.findOne({ email });
-
-    // Always return success to avoid email enumeration
-    if (!user) {
-      return res.json({ message: 'If this email is registered, a reset link has been sent.' });
-    }
-
-    // Generate Firebase password reset link
+    if (!user) return res.json({ message: 'Reset link sent if registered.' });
     const resetLink = await admin.auth().generatePasswordResetLink(email);
-
-    // TODO: Send resetLink via your preferred email service (nodemailer, sendgrid, etc.)
-    console.log(`Password reset link for ${email}: ${resetLink}`);
-
-    res.json({ message: 'If this email is registered, a reset link has been sent.' });
-  } catch (error) {
-    console.error('Forgot Password Error:', error);
-    res.status(500).json({ message: 'Failed to send reset email. Please try again.' });
-  }
+    console.log(`Reset link: ${resetLink}`);
+    res.json({ message: 'Reset link sent if registered.' });
+  } catch (error) { res.status(500).json({ message: 'Error' }); }
 };
