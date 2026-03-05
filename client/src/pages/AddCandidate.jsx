@@ -63,7 +63,7 @@ const getCandidateId = (c) => c.candidateId || c._id?.substring(c._id.length - 6
 const formatDate = (dateString) => dateString ? new Date(dateString).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A';
 const formatSkills = (skills) => !skills ? 'N/A' : Array.isArray(skills) ? skills.slice(0, 3).join(', ') + (skills.length > 3 ? '...' : '') : skills.length > 50 ? skills.substring(0, 50) + '...' : skills;
 
-// ✅ New Helper to safely grab the Recruiter/Admin Name since some users only have a 'username'
+// ✅ Helper to safely grab the name since some users only have a 'username'
 const getRecruiterName = (r) => {
   if (!r) return 'Unassigned';
   if (r.name) return r.name;
@@ -72,6 +72,13 @@ const getRecruiterName = (r) => {
   if (first || last) return `${first} ${last}`.trim();
   if (r.username) return r.username;
   return r.email || 'Unknown';
+};
+
+// ✅ Returns a display label with role indicator for dropdowns
+const getRecruiterLabel = (r) => {
+  const name = getRecruiterName(r);
+  const roleTag = r.role === 'admin' ? ' (Admin)' : r.role === 'manager' ? ' (Manager)' : '';
+  return `${name}${roleTag}`;
 };
 
 const ALL_STATUSES = [
@@ -145,6 +152,8 @@ export default function AdminCandidates() {
       const headers = getAuthHeader();
       const [resCand, resRec, resCli] = await Promise.all([
         fetch(`${API_URL}/candidates`, { headers }),
+        // ✅ FIX: /api/recruiters now returns ALL active users (admin + manager + recruiter)
+        // so every user can be assigned to candidates
         fetch(`${API_URL}/recruiters`, { headers }),
         fetch(`${API_URL}/clients`, { headers }),
       ]);
@@ -155,7 +164,12 @@ export default function AdminCandidates() {
       }
       if (resRec.ok) {
         const data = await resRec.json();
-        setRecruiters(data);
+        // Sort: admins first, then managers, then recruiters
+        const sorted = data.sort((a, b) => {
+          const order = { admin: 0, manager: 1, recruiter: 2 };
+          return (order[a.role] ?? 3) - (order[b.role] ?? 3);
+        });
+        setRecruiters(sorted);
       }
       if (resCli.ok) {
         const data = await resCli.json();
@@ -557,8 +571,7 @@ export default function AdminCandidates() {
             </select>
             <select value={recruiterFilter} onChange={(e) => setRecruiterFilter(e.target.value)} className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
               <option value="all">All Users</option>
-              {/* ✅ USING getRecruiterName HELPER HERE */}
-              {recruiters.map((r) => <option key={r._id || r.id} value={r._id || r.id}>{getRecruiterName(r)}</option>)}
+              {recruiters.map((r) => <option key={r._id || r.id} value={r._id || r.id}>{getRecruiterLabel(r)}</option>)}
             </select>
           </div>
         </div>
@@ -577,10 +590,9 @@ export default function AdminCandidates() {
                 className="border border-blue-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none min-w-[200px]"
               >
                 <option value="">Assign to User...</option>
-                {/* ✅ USING getRecruiterName HELPER HERE */}
                 {recruiters.map((r) => (
                   <option key={r._id || r.id} value={r._id || r.id}>
-                    {getRecruiterName(r)}
+                    {getRecruiterLabel(r)}
                   </option>
                 ))}
               </select>
@@ -920,8 +932,7 @@ export default function AdminCandidates() {
                     <label className="block text-sm font-medium mb-1 text-slate-700">Assign to User</label>
                     <select value={formData.recruiterId} onChange={(e) => handleInputChange('recruiterId', e.target.value)} className={inputCls(false)}>
                       <option value="">Select User</option>
-                      {/* ✅ USING getRecruiterName HELPER HERE */}
-                      {recruiters.map((r) => <option key={r._id || r.id} value={r._id || r.id}>{getRecruiterName(r)}</option>)}
+                      {recruiters.map((r) => <option key={r._id || r.id} value={r._id || r.id}>{getRecruiterLabel(r)}</option>)}
                     </select>
                   </div>
                   <div className="md:col-span-2">

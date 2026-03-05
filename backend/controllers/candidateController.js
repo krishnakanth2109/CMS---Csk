@@ -33,14 +33,21 @@ export const createCandidate = async (req, res) => {
       body.skills = body.skills.split(',').map(s => s.trim()).filter(Boolean);
     }
 
+    // ✅ FIX: Centralized name resolver — handles firstName+lastName, username, and email fallback
+    const resolveUserName = (u) => {
+      if (!u) return 'Unknown';
+      const full = `${u.firstName || ''} ${u.lastName || ''}`.trim();
+      return full || u.username || u.email || 'Unknown';
+    };
+
     let targetRecruiterId = req.user._id;
-    let targetRecruiterName = `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || req.user.email;
+    let targetRecruiterName = resolveUserName(req.user);
 
     if ((req.user.role === 'admin' || req.user.role === 'manager') && body.recruiterId) {
       const assignedRecruiter = await User.findById(body.recruiterId);
       if (assignedRecruiter) {
         targetRecruiterId = assignedRecruiter._id;
-        targetRecruiterName = `${assignedRecruiter.firstName || ''} ${assignedRecruiter.lastName || ''}`.trim() || assignedRecruiter.email;
+        targetRecruiterName = resolveUserName(assignedRecruiter);
       }
     }
 

@@ -116,9 +116,10 @@ export default function AdminRecruiters() {
       const recruiterData = await rr.json();
       const candidateData = await rc.json();
 
-      // ✅ FIX: Filter to keep 'recruiter', 'admin', and 'manager' users
+      // ✅ FIX: Only show 'recruiter' and 'admin' roles on this page.
+      // Managers are excluded — they are not shown in the Recruiters list.
       const allUsers = recruiterData
-        .filter((user) => ['recruiter', 'admin', 'manager'].includes(user.role))
+        .filter((user) => ['recruiter', 'admin'].includes(user.role))
         .map((r) => ({ ...r, id: r._id }));
 
       setRecruiters(allUsers);

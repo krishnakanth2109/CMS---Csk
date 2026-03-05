@@ -171,7 +171,13 @@ export const updateUserProfile = async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 export const getRecruiters = async (req, res) => {
   try {
-    const recruiters = await User.find({ role: { $ne: 'admin' } }).select('-password');
+    // ✅ FIX: Fetch only 'recruiter' and 'admin' roles — managers are intentionally excluded.
+    // The Recruiters page shows admins + recruiters only.
+    // Managers are managed separately and should not appear in this list.
+    const recruiters = await User.find({
+      active: true,
+      role: { $in: ['recruiter', 'admin'] }
+    }).select('-password').sort({ role: 1, firstName: 1 });
     res.json(recruiters);
   } catch (error) {
     res.status(500).json({ message: error.message });

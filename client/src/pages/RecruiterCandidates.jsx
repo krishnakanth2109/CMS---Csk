@@ -264,11 +264,20 @@ export default function RecruiterCandidates() {
         const allClients = await clientRes.json();
 
         let finalCandidates = allCandidates;
+
+        // ✅ FIX: Admin and Manager get all candidates scoped by the backend already.
+        // Only apply the frontend recruiterId filter for 'recruiter' role users.
+        // For admin/manager on "My Candidates" page, show only their OWN assigned candidates
+        // (recruiterId === their _id), but do NOT restrict the overall candidates page.
+        // This component is the "My Candidates" personal view — filter by current user's _id
+        // for ALL roles, but use safe String() comparison to avoid ObjectId vs string mismatch.
         if (currentUser?._id) {
-           finalCandidates = allCandidates.filter(c => {
-             const cRecruiterId = typeof c.recruiterId === 'object' ? c.recruiterId?._id : c.recruiterId;
-             return cRecruiterId === currentUser._id;
-           });
+          finalCandidates = allCandidates.filter(c => {
+            const cRecruiterId = typeof c.recruiterId === 'object'
+              ? String(c.recruiterId?._id)
+              : String(c.recruiterId || '');
+            return cRecruiterId === String(currentUser._id);
+          });
         }
 
         finalCandidates.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());

@@ -130,16 +130,23 @@ router.post('/', upload.single('resume'), async (req, res) => {
       candidateData.resumeOriginalName = req.file.originalname;
     }
 
+    // ✅ FIX: User schema has no .name field — build name from firstName + lastName + username fallback
+    const resolveUserName = (u) => {
+      if (!u) return 'Unknown';
+      const full = `${u.firstName || ''} ${u.lastName || ''}`.trim();
+      return full || u.username || u.email || 'Unknown';
+    };
+
     // Handle Recruiter Assignment
     let targetRecruiterId = req.user._id;
-    let targetRecruiterName = req.user.name;
+    let targetRecruiterName = resolveUserName(req.user);
 
-    // Allow Managers to assign candidates to specific recruiters
+    // Allow Admins/Managers to assign candidates to any user
     if ((req.user.role === 'admin' || req.user.role === 'manager') && candidateData.recruiterId) {
       const assignedRecruiter = await User.findById(candidateData.recruiterId);
       if (assignedRecruiter) {
         targetRecruiterId = assignedRecruiter._id;
-        targetRecruiterName = assignedRecruiter.name;
+        targetRecruiterName = resolveUserName(assignedRecruiter);
       }
     }
 
@@ -153,6 +160,51 @@ router.post('/', upload.single('resume'), async (req, res) => {
   } catch (error) {
     console.error("Create Error:", error);
     res.status(400).json({ message: error.message });
+  }
+});
+
+// BULK ASSIGN — assign multiple candidates to any user (admin/manager only)
+// POST /api/candidates/bulk-assign
+router.put('/bulk-assign', async (req, res) => {
+  try {
+    // Only admin and manager can bulk-assign
+    if (req.user.role !== 'admin' && req.user.role !== 'manager') {
+      return res.status(403).json({ message: 'Not authorized to bulk assign candidates' });
+    }
+
+    const { candidateIds, recruiterId } = req.body;
+
+    if (!candidateIds || !Array.isArray(candidateIds) || candidateIds.length === 0) {
+      return res.status(400).json({ message: 'Please provide at least one candidate ID' });
+    }
+    if (!recruiterId) {
+      return res.status(400).json({ message: 'Please provide a recruiter/user ID to assign to' });
+    }
+
+    // ✅ Resolve the target user's display name (no .name field in User schema)
+    const targetUser = await User.findById(recruiterId);
+    if (!targetUser) {
+      return res.status(404).json({ message: 'Target user not found' });
+    }
+    const resolveUserName = (u) => {
+      const full = `${u.firstName || ''} ${u.lastName || ''}`.trim();
+      return full || u.username || u.email || 'Unknown';
+    };
+    const recruiterName = resolveUserName(targetUser);
+
+    // Bulk update all candidates in the list
+    const result = await Candidate.updateMany(
+      { _id: { $in: candidateIds } },
+      { $set: { recruiterId: targetUser._id, recruiterName } }
+    );
+
+    res.json({
+      message: `Successfully assigned ${result.modifiedCount} candidate(s) to ${recruiterName}`,
+      modifiedCount: result.modifiedCount,
+    });
+  } catch (error) {
+    console.error('Bulk assign error:', error);
+    res.status(500).json({ message: error.message });
   }
 });
 
@@ -195,6 +247,19 @@ router.put('/:id', upload.single('resume'), async (req, res) => {
     if (req.file) {
       updateData.resumeUrl = `/uploads/${req.file.filename}`;
       updateData.resumeOriginalName = req.file.originalname;
+    }
+
+    // ✅ FIX: When admin/manager reassigns recruiter on edit, sync recruiterName too
+    if ((req.user.role === 'admin' || req.user.role === 'manager') && updateData.recruiterId) {
+      const resolveUserName = (u) => {
+        if (!u) return 'Unknown';
+        const full = `${u.firstName || ''} ${u.lastName || ''}`.trim();
+        return full || u.username || u.email || 'Unknown';
+      };
+      const assignedRecruiter = await User.findById(updateData.recruiterId);
+      if (assignedRecruiter) {
+        updateData.recruiterName = resolveUserName(assignedRecruiter);
+      }
     }
 
     const updatedCandidate = await Candidate.findByIdAndUpdate(req.params.id, updateData, { new: true });
