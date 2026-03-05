@@ -11,9 +11,9 @@ export const getCandidates = async (req, res) => {
       query.recruiterId = req.user._id;
     }
     
-    // 🔴 FIXED: Added firstName, lastName, and email to populate so the frontend table can display it
+    // 🔴 FIXED: Added username and firstName to populate so frontend shows firstName only
     const candidates = await Candidate.find(query)
-      .populate('recruiterId', 'name firstName lastName email')
+      .populate('recruiterId', 'name firstName lastName username email')
       .sort({ createdAt: -1 });
       
     res.json(candidates);
