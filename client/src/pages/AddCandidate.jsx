@@ -63,14 +63,12 @@ const getCandidateId = (c) => c.candidateId || c._id?.substring(c._id.length - 6
 const formatDate = (dateString) => dateString ? new Date(dateString).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A';
 const formatSkills = (skills) => !skills ? 'N/A' : Array.isArray(skills) ? skills.slice(0, 3).join(', ') + (skills.length > 3 ? '...' : '') : skills.length > 50 ? skills.substring(0, 50) + '...' : skills;
 
-// ✅ Helper to safely grab the name since some users only have a 'username'
+// ✅ Returns firstName only for recruiter column display
 const getRecruiterName = (r) => {
   if (!r) return 'Unassigned';
-  if (r.name) return r.name;
-  const first = r.firstName || '';
-  const last = r.lastName || '';
-  if (first || last) return `${first} ${last}`.trim();
+  if (r.firstName) return r.firstName;
   if (r.username) return r.username;
+  if (r.name) return r.name.split(' ')[0];
   return r.email || 'Unknown';
 };
 
@@ -616,28 +614,29 @@ export default function AdminCandidates() {
 
         {/* Table Area With Double Horizontal Scroll Bar */}
         <style>{`
-          .sleek-scrollbar::-webkit-scrollbar { height: 6px; }
-          .sleek-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 6px; }
-          .sleek-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 6px; }
-          .sleek-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+          .tbl-scroll::-webkit-scrollbar { height: 10px; }
+          .tbl-scroll::-webkit-scrollbar-track { background: #e2e8f0; border-radius: 10px; }
+          .tbl-scroll::-webkit-scrollbar-thumb { background: #475569; border-radius: 10px; border: 2px solid #e2e8f0; }
+          .tbl-scroll::-webkit-scrollbar-thumb:hover { background: #1e293b; }
+          .tbl-scroll { scrollbar-width: thin; scrollbar-color: #475569 #e2e8f0; }
         `}</style>
         <div className="overflow-hidden border border-slate-200 rounded-xl shadow-sm bg-white flex flex-col">
           {loading ? (
             <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-blue-600" /></div>
           ) : (
             <>
-              {/* TOP SCROLLBAR */}
+              {/* TOP SCROLLBAR — always visible, synced with table below */}
               <div 
                 ref={topScrollRef} 
                 onScroll={handleTopScroll} 
-                className="overflow-x-auto overflow-y-hidden sleek-scrollbar rounded-t-xl bg-slate-50 border-b border-slate-100"
-                style={{ height: '10px' }}
+                className="tbl-scroll rounded-t-xl bg-slate-100 border-b border-slate-200"
+                style={{ overflowX: 'scroll', overflowY: 'hidden', height: '18px' }}
               >
                 <div style={{ width: '1800px', height: '1px' }}></div>
               </div>
 
               {/* TABLE CONTAINER */}
-              <div ref={bottomScrollRef} onScroll={handleBottomScroll} className="overflow-x-auto sleek-scrollbar rounded-b-xl">
+              <div ref={bottomScrollRef} onScroll={handleBottomScroll} className="tbl-scroll rounded-b-xl" style={{ overflowX: 'scroll' }}>
                 <table className="w-full text-sm text-left border-collapse min-w-[1800px]">
                   <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
                     <tr>
