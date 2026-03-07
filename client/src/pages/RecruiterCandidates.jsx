@@ -733,7 +733,7 @@ export default function RecruiterCandidates() {
             <div>
               <h1 className="text-3xl font-bold">
                 {/* Dynamically Show correct title */}
-                {(userRole === 'admin' || userRole === 'manager') ? 'My Candidates (Personal View)' : 'My Candidates'}
+                {(userRole === 'admin' || userRole === 'manager') ? 'My Candidates' : 'My Candidates'}
               </h1>
               <p className="text-slate-500">Manage pipeline</p>
             </div>
