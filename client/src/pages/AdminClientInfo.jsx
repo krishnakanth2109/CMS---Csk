@@ -167,10 +167,86 @@ export default function AdminClientInfo() {
 
   const validateForm = () => {
     const e = {};
-    if (!form.companyName.trim()) e.companyName = "Company required";
-    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = "Invalid email";
-    if (form.phone && form.phone.length !== 10) e.phone = "Phone must be 10 digits";
-    if (form.percentage && (isNaN(form.percentage) || form.percentage > 100)) e.percentage = "Invalid %";
+
+    // ── Company Name: required, letters/spaces/punctuation only, 2–100 chars
+    if (!form.companyName.trim()) {
+      e.companyName = "Company name is required";
+    } else if (!/^[a-zA-Z\s'.,&()\-]{2,100}$/.test(form.companyName.trim())) {
+      e.companyName = "Company name must contain letters only (no numbers)";
+    }
+
+    // ── Contact Person: optional, letters/spaces only if filled ──────────────
+    if (form.contactPerson.trim() && !/^[a-zA-Z\s'.'\-]{2,80}$/.test(form.contactPerson.trim())) {
+      e.contactPerson = "Contact person must be letters only (2–80 chars)";
+    }
+
+    // ── Email: optional, valid format if filled ───────────────────────────────
+    if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(form.email.trim())) {
+      e.email = "Enter a valid email address (e.g. name@company.com)";
+    }
+
+    // ── Phone: optional, exactly 10 digits starting with 6-9 if filled ───────
+    if (form.phone.trim()) {
+      const cleanPhone = form.phone.replace(/[\s\-+]/g, '');
+      if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
+        e.phone = "Enter a valid 10-digit Indian mobile number (starts with 6–9)";
+      }
+    }
+
+    // ── Industry: optional, letters/spaces only if filled ────────────────────
+    if (form.industry.trim() && !/^[a-zA-Z\s&\/\-,]{2,80}$/.test(form.industry.trim())) {
+      e.industry = "Industry must be letters only (2–80 chars)";
+    }
+
+    // ── Website: optional, must look like a URL if filled ────────────────────
+    if (form.website.trim() && !/^(https?:\/\/)?(www\.)?[\w\-]+\.[a-zA-Z]{2,}(\/\S*)?$/.test(form.website.trim())) {
+      e.website = "Enter a valid website URL (e.g. https://company.com)";
+    }
+
+    // ── GST Number: optional, standard 15-char Indian GST format if filled ───
+    if (form.gstNumber.trim() && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(form.gstNumber.trim().toUpperCase())) {
+      e.gstNumber = "Enter a valid 15-character GST number (e.g. 22AAAAA0000A1Z5)";
+    }
+
+    // ── Commission %: optional, must be a number 0–100 if filled ─────────────
+    if (form.percentage.toString().trim() !== "") {
+      const pct = Number(form.percentage);
+      if (isNaN(pct) || !/^\d+(\.\d+)?$/.test(form.percentage.toString().trim())) {
+        e.percentage = "Commission must be a number (e.g. 15 or 15.5)";
+      } else if (pct < 0 || pct > 100) {
+        e.percentage = "Commission % must be between 0 and 100";
+      }
+    }
+
+    // ── Candidate Period: optional, must be a positive integer (months) ───────
+    if (form.candidatePeriod.toString().trim() !== "") {
+      const cp = Number(form.candidatePeriod);
+      if (!Number.isInteger(cp) || cp < 1 || cp > 120) {
+        e.candidatePeriod = "Must be a whole number of months (1–120)";
+      }
+    }
+
+    // ── Replacement Period: optional, must be a positive integer (days) ───────
+    if (form.replacementPeriod.toString().trim() !== "") {
+      const rp = Number(form.replacementPeriod);
+      if (!Number.isInteger(rp) || rp < 1 || rp > 365) {
+        e.replacementPeriod = "Must be a whole number of days (1–365)";
+      }
+    }
+
+    // ── Locking Period: optional, must be a positive integer (days) ────────────
+    if (form.lockingPeriod.toString().trim() !== "") {
+      const lp = Number(form.lockingPeriod);
+      if (!Number.isInteger(lp) || lp < 1 || lp > 365) {
+        e.lockingPeriod = "Locking period must be a whole number of days (1–365)";
+      }
+    }
+
+    // ── Payment Mode: optional, letters/numbers/hyphens if filled ────────────
+    if (form.paymentMode.trim() && !/^[a-zA-Z0-9\s\-\/]{2,50}$/.test(form.paymentMode.trim())) {
+      e.paymentMode = "Payment mode must be 2–50 alphanumeric characters (e.g. Net-30)";
+    }
+
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -179,6 +255,7 @@ export default function AdminClientInfo() {
     const { name, value, type, checked } = e.target;
     if (name === "phone" && /[^0-9]/.test(value)) return;
     if (name === "phone" && value.length > 10) return;
+    if (name === "lockingPeriod" && value !== "" && /[^0-9]/.test(value)) return;
     setForm({ ...form, [name]: type === "checkbox" ? checked : value });
     if (errors[name]) {
       const copy = { ...errors };
@@ -280,22 +357,27 @@ export default function AdminClientInfo() {
             <div>
               <label className="block text-xs font-medium text-zinc-500 mb-1">Company Name *</label>
               <input name="companyName" value={form.companyName} onChange={handleChange} className={`${inputCls} ${errors.companyName ? 'border-red-500' : ''}`} />
+              {errors.companyName && <p className="text-xs text-red-500 mt-1">{errors.companyName}</p>}
             </div>
             <div>
               <label className="block text-xs font-medium text-zinc-500 mb-1">Contact Person</label>
-              <input name="contactPerson" value={form.contactPerson} onChange={handleChange} className={inputCls} />
+              <input name="contactPerson" value={form.contactPerson} onChange={handleChange} className={`${inputCls} ${errors.contactPerson ? 'border-red-500' : ''}`} />
+              {errors.contactPerson && <p className="text-xs text-red-500 mt-1">{errors.contactPerson}</p>}
             </div>
             <div>
               <label className="block text-xs font-medium text-zinc-500 mb-1">Email</label>
               <input name="email" value={form.email} onChange={handleChange} className={`${inputCls} ${errors.email ? 'border-red-500' : ''}`} />
+              {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email}</p>}
             </div>
             <div>
               <label className="block text-xs font-medium text-zinc-500 mb-1">Phone (10 digits)</label>
               <input name="phone" value={form.phone} onChange={handleChange} className={`${inputCls} ${errors.phone ? 'border-red-500' : ''}`} />
+              {errors.phone && <p className="text-xs text-red-500 mt-1">{errors.phone}</p>}
             </div>
             <div>
               <label className="block text-xs font-medium text-zinc-500 mb-1">Industry</label>
-              <input name="industry" value={form.industry} onChange={handleChange} className={inputCls} />
+              <input name="industry" value={form.industry} onChange={handleChange} className={`${inputCls} ${errors.industry ? 'border-red-500' : ''}`} />
+              {errors.industry && <p className="text-xs text-red-500 mt-1">{errors.industry}</p>}
             </div>
             
             {/* --- ADDED NEW FIELDS HERE --- */}
@@ -305,17 +387,20 @@ export default function AdminClientInfo() {
             </div>
             <div>
               <label className="block text-xs font-medium text-zinc-500 mb-1">Locking Period</label>
-              <input name="lockingPeriod" value={form.lockingPeriod} onChange={handleChange} placeholder="e.g. 30 Days" className={inputCls} />
+              <input name="lockingPeriod" value={form.lockingPeriod} onChange={handleChange} placeholder="e.g. 30" className={`${inputCls} ${errors.lockingPeriod ? 'border-red-500' : ''}`} />
+              {errors.lockingPeriod && <p className="text-xs text-red-500 mt-1">{errors.lockingPeriod}</p>}
             </div>
             <div>
               <label className="block text-xs font-medium text-zinc-500 mb-1">Payment Mode</label>
-              <input name="paymentMode" value={form.paymentMode} onChange={handleChange} placeholder="e.g. Net-30" className={inputCls} />
+              <input name="paymentMode" value={form.paymentMode} onChange={handleChange} placeholder="e.g. Net-30" className={`${inputCls} ${errors.paymentMode ? 'border-red-500' : ''}`} />
+              {errors.paymentMode && <p className="text-xs text-red-500 mt-1">{errors.paymentMode}</p>}
             </div>
              {/* ----------------------------- */}
 
             <div>
               <label className="block text-xs font-medium text-zinc-500 mb-1">Commission %</label>
-              <input name="percentage" value={form.percentage} onChange={handleChange} className={`${inputCls} ${errors.percentage ? 'border-red-500' : ''}`} />
+              <input name="percentage" value={form.percentage} onChange={handleChange} placeholder="e.g. 15" className={`${inputCls} ${errors.percentage ? 'border-red-500' : ''}`} />
+              {errors.percentage && <p className="text-xs text-red-500 mt-1">{errors.percentage}</p>}
             </div>
             <div className="md:col-span-3 flex justify-end pt-4">
               <button

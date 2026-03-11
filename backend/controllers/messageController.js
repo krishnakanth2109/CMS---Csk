@@ -1,7 +1,24 @@
 import Message from '../models/Message.js';
 import User from '../models/User.js';
 
-// @desc    Get messages for a user (either Admin or Recruiter)
+// Helper: resolve a display name (firstName + lastName) from id or keyword
+const resolveName = async (value) => {
+  if (!value) return 'Unknown';
+  if (value === 'admin') return 'Admin';
+  if (value === 'all')   return 'Everyone';
+
+  // Valid MongoDB ObjectId (24 hex chars)
+  if (/^[a-f\d]{24}$/i.test(value)) {
+    const user = await User.findById(value).select('firstName lastName username role');
+    if (user) {
+      const full = [user.firstName, user.lastName].filter(Boolean).join(' ');
+      return full || user.username || 'User';
+    }
+  }
+  return value; // fallback
+};
+
+// @desc    Get messages for a user (Admin, Manager, or Recruiter)
 // @route   GET /api/messages
 export const getMessages = async (req, res) => {
   try {
@@ -9,14 +26,16 @@ export const getMessages = async (req, res) => {
     let query;
 
     if (role === 'admin') {
+      // Admin sees all messages to/from admin + broadcasts
       query = {
         $or: [
           { to: 'admin' },
-          { from: 'admin' }
+          { from: 'admin' },
+          { to: 'all' }
         ]
       };
     } else {
-      // For recruiters, match by ID or Username or Broadcasts
+      // Manager OR Recruiter: match by their MongoDB id, username, or broadcasts
       query = {
         $or: [
           { to: id },
@@ -30,37 +49,13 @@ export const getMessages = async (req, res) => {
 
     const messages = await Message.find(query).sort({ createdAt: -1 });
 
-    // Enhance messages with usernames
-    const enhancedMessages = await Promise.all(messages.map(async (msg) => {
-      let fromName = msg.from;
-      let toName = msg.to;
-
-      // Resolve Sender Username
-      if (msg.from === 'admin') {
-        fromName = 'Admin';
-      } else if (msg.from.length === 24) {
-        // Fetch ONLY the username field
-        const user = await User.findById(msg.from).select('username');
-        if (user) fromName = user.username;
-      }
-
-      // Resolve Recipient Username
-      if (msg.to === 'admin') {
-        toName = 'Admin';
-      } else if (msg.to === 'all') {
-        toName = 'Everyone';
-      } else if (msg.to.length === 24) {
-        // Fetch ONLY the username field
-        const user = await User.findById(msg.to).select('username');
-        if (user) toName = user.username;
-      }
-
-      return {
-        ...msg.toObject(),
-        fromName: fromName || msg.from,
-        toName: toName || msg.to
-      };
-    }));
+    const enhancedMessages = await Promise.all(
+      messages.map(async (msg) => {
+        const fromName = await resolveName(msg.from);
+        const toName   = await resolveName(msg.to);
+        return { ...msg.toObject(), fromName, toName };
+      })
+    );
 
     res.json(enhancedMessages);
   } catch (error) {
@@ -73,42 +68,17 @@ export const getMessages = async (req, res) => {
 export const sendMessage = async (req, res) => {
   try {
     const { to, subject, content } = req.body;
-    // If admin, sender is 'admin', else user ID
-    const from = req.user.role === 'admin' ? 'admin' : req.user.id;
+    const { role, id } = req.user;
 
-    const message = await Message.create({
-      from,
-      to,
-      subject,
-      content
-    });
-    
-    // 1. Resolve Sender Username
-    let fromName = from;
-    if (from === 'admin') {
-      fromName = 'Admin';
-    } else {
-      const user = await User.findById(from).select('username');
-      if (user) fromName = user.username;
-    }
+    // Admin sends as 'admin', everyone else sends as their MongoDB id
+    const from = role === 'admin' ? 'admin' : id;
 
-    // 2. Resolve Recipient Username
-    let toName = to;
-    if (to === 'admin') {
-      toName = 'Admin';
-    } else if (to === 'all') {
-      toName = 'Everyone';
-    } else if (to.length === 24) {
-      const user = await User.findById(to).select('username');
-      if (user) toName = user.username;
-    }
+    const message = await Message.create({ from, to, subject, content });
 
-    // Return full object with usernames so UI updates immediately
-    res.status(201).json({ 
-      ...message.toObject(), 
-      fromName,
-      toName 
-    });
+    const fromName = await resolveName(from);
+    const toName   = await resolveName(to);
+
+    res.status(201).json({ ...message.toObject(), fromName, toName });
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
@@ -119,12 +89,8 @@ export const sendMessage = async (req, res) => {
 export const updateMessage = async (req, res) => {
   try {
     const message = await Message.findById(req.params.id);
+    if (!message) return res.status(404).json({ message: 'Message not found' });
 
-    if (!message) {
-      return res.status(404).json({ message: 'Message not found' });
-    }
-
-    // Only Admin or Sender can edit
     if (req.user.role !== 'admin' && message.from !== req.user.id) {
       return res.status(401).json({ message: 'Not authorized' });
     }
@@ -144,12 +110,8 @@ export const updateMessage = async (req, res) => {
 export const deleteMessage = async (req, res) => {
   try {
     const message = await Message.findById(req.params.id);
+    if (!message) return res.status(404).json({ message: 'Message not found' });
 
-    if (!message) {
-      return res.status(404).json({ message: 'Message not found' });
-    }
-
-    // Only Admin or Sender can delete
     if (req.user.role !== 'admin' && message.from !== req.user.id) {
       return res.status(401).json({ message: 'Not authorized' });
     }

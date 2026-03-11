@@ -1,4 +1,4 @@
-import React, { useState } from 'react'; // Added useState
+import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { 
@@ -12,38 +12,36 @@ import clsx from 'clsx';
 export default function Sidebar({ isOpen, toggleSidebar }) {
   const { userRole, logout, currentUser } = useAuth();
   
-  // State for the Sign Out confirmation modal
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   
-  // -- Colors matching the PDF --
   const sidebarBg = "bg-[#283086]"; 
   const mainBackgroundColor = "#f3f6fd"; 
   const activeBgClass = `bg-[#f3f6fd]`; 
-  
   const activeTextClass = "text-[#283086] font-extrabold"; 
   const inactiveTextClass = "text-white font-medium hover:bg-white/10";
 
+  // ✅ Manager links — Messages now points to /admin/manager-messages
   const managerLinks = [
-    { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
-    { name: 'OverAll Candidates', path: '/admin/add-candidate', icon: Users }, 
-    { name: 'Recruiters', path: '/admin/recruiters', icon: Briefcase },
-    { name: 'Client Info', path: '/admin/clients', icon: Building2 },
-    { name: 'Invoices', path: '/admin/invoices', icon: Receipt },
-    { name: 'Requirements', path: '/admin/requirements', icon: ClipboardList },
-    { name: 'Messages', path: '/admin/messages', icon: MessageSquare },
-    { name: 'Reports', path: '/admin/reports', icon: BarChart3 },
-    { name: 'Settings', path: '/admin/settings', icon: Settings }, 
+    { name: 'Dashboard',          path: '/admin',                   icon: LayoutDashboard },
+    { name: 'OverAll Candidates', path: '/admin/add-candidate',     icon: Users }, 
+    { name: 'Recruiters',         path: '/admin/recruiters',        icon: Briefcase },
+    { name: 'Client Info',        path: '/admin/clients',           icon: Building2 },
+    { name: 'Invoices',           path: '/admin/invoices',          icon: Receipt },
+    { name: 'Requirements',       path: '/admin/requirements',      icon: ClipboardList },
+    { name: 'Messages',           path: '/admin/manager-messages',  icon: MessageSquare }, // ✅ UPDATED
+    { name: 'Reports',            path: '/admin/reports',           icon: BarChart3 },
+    { name: 'Settings',           path: '/admin/settings',          icon: Settings }, 
   ];
 
   const recruiterLinks = [
-    { name: 'Dashboard', path: '/recruiter', icon: LayoutDashboard },
-    { name: 'My Candidates', path: '/recruiter/candidates', icon: UserPlus },
-    { name: 'Assignments', path: '/recruiter/assignments', icon: Briefcase },
-    { name: 'Schedules', path: '/recruiter/schedules', icon: ClipboardList },
-    { name: 'Messages', path: '/recruiter/messages', icon: MessageSquare },
-    { name: 'Reports', path: '/recruiter/reports', icon: BarChart3 },
-    { name: 'My Profile', path: '/recruiter/profile', icon: User },
-    { name: 'Settings', path: '/recruiter/settings', icon: Settings },
+    { name: 'Dashboard',    path: '/recruiter',            icon: LayoutDashboard },
+    { name: 'My Candidates',path: '/recruiter/candidates', icon: UserPlus },
+    { name: 'Assignments',  path: '/recruiter/assignments',icon: Briefcase },
+    { name: 'Schedules',    path: '/recruiter/schedules',  icon: ClipboardList },
+    { name: 'Messages',     path: '/recruiter/messages',   icon: MessageSquare },
+    { name: 'Reports',      path: '/recruiter/reports',    icon: BarChart3 },
+    { name: 'My Profile',   path: '/recruiter/profile',    icon: User },
+    { name: 'Settings',     path: '/recruiter/settings',   icon: Settings },
   ];
 
   let links = [];
@@ -51,14 +49,14 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
     links = managerLinks;
   } else if (userRole === 'admin') {
     links = [
-      { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
+      { name: 'Dashboard',          path: '/admin',               icon: LayoutDashboard },
       { name: 'OverAll Candidates', path: '/admin/add-candidate', icon: Users },
-      { name: 'My Candidates', path: '/admin/my-candidates', icon: UserPlus },
-      { name: 'Recruiters', path: '/admin/recruiters', icon: Briefcase },
-      { name: 'Requirements', path: '/admin/requirements', icon: ClipboardList },
-      { name: 'Messages', path: '/admin/messages', icon: MessageSquare },
-      { name: 'Reports', path: '/admin/reports', icon: BarChart3 },
-      { name: 'Settings', path: '/admin/settings', icon: Settings },
+      { name: 'My Candidates',      path: '/admin/my-candidates', icon: UserPlus },
+      { name: 'Recruiters',         path: '/admin/recruiters',    icon: Briefcase },
+      { name: 'Requirements',       path: '/admin/requirements',  icon: ClipboardList },
+      { name: 'Messages',           path: '/admin/messages',      icon: MessageSquare }, // Admin keeps AdminMessages
+      { name: 'Reports',            path: '/admin/reports',       icon: BarChart3 },
+      { name: 'Settings',           path: '/admin/settings',      icon: Settings },
     ];
   } else {
     links = recruiterLinks;
@@ -123,21 +121,14 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
                     <>
                       <div 
                         className="absolute right-0 -top-[30px] w-[30px] h-[30px] bg-transparent pointer-events-none"
-                        style={{
-                          borderBottomRightRadius: '25px', 
-                          boxShadow: `10px 10px 0 10px ${mainBackgroundColor}` 
-                        }}
+                        style={{ borderBottomRightRadius: '25px', boxShadow: `10px 10px 0 10px ${mainBackgroundColor}` }}
                       />
                       <div 
                         className="absolute right-0 -bottom-[30px] w-[30px] h-[30px] bg-transparent pointer-events-none"
-                        style={{
-                          borderTopRightRadius: '25px',
-                          boxShadow: `10px -10px 0 10px ${mainBackgroundColor}`
-                        }}
+                        style={{ borderTopRightRadius: '25px', boxShadow: `10px -10px 0 10px ${mainBackgroundColor}` }}
                       />
                     </>
                   )}
-
                   <div className={clsx("flex items-center z-20 relative transition-all", isOpen ? "gap-5" : "gap-0")}>
                     <link.icon className={clsx("h-5 w-5 transition-transform", isActive ? "scale-110 stroke-[3px]" : "stroke-[2.5px]")} />
                     {isOpen && <span className="text-[15px] tracking-wide whitespace-nowrap">{link.name}</span>}
@@ -162,16 +153,14 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
 
       {/* --- Logout Confirmation Modal --- */}
       {showLogoutModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm transition-opacity">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <div className="p-6 text-center">
               <div className="mx-auto w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mb-4">
                 <Power className="h-6 w-6 text-red-600" />
               </div>
               <h3 className="text-xl font-bold text-slate-900 mb-2">Sign Out</h3>
-              <p className="text-slate-500 text-sm mb-6">
-                Are you sure you want to sign out of your account?
-              </p>
+              <p className="text-slate-500 text-sm mb-6">Are you sure you want to sign out of your account?</p>
               <div className="flex gap-3 w-full">
                 <button 
                   onClick={() => setShowLogoutModal(false)}

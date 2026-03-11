@@ -24,6 +24,15 @@ const getAuthHeader = () => {
 };
 // ──────────────────────────────────────────────────────────────────────────────
 
+// ✅ MOVED OUTSIDE: This prevents the component from re-mounting and losing focus on every keystroke.
+const Field = ({ label, children, error }) => (
+  <div className="space-y-1">
+    <label className="text-sm font-medium text-slate-700">{label}</label>
+    {children}
+    {error && <p className="text-xs text-red-500 mt-0.5">{error}</p>}
+  </div>
+);
+
 export default function RecruiterProfile() {
   const { toast } = useToast();
   const fileInputRef = useRef(null);
@@ -34,6 +43,7 @@ export default function RecruiterProfile() {
   const [isEditing,      setIsEditing]      = useState(false);
   const [activeTab,      setActiveTab]      = useState('profile');
   const [imagePreview,   setImagePreview]   = useState('');
+  const [errors,         setErrors]         = useState({});
 
   const [profile, setProfile] = useState({
     _id: '', firstName: '', lastName: '', email: '', username: '',
@@ -92,7 +102,7 @@ export default function RecruiterProfile() {
         setProfileLoading(false);
       }
     })();
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
     (async () => {
@@ -132,22 +142,88 @@ export default function RecruiterProfile() {
     reader.readAsDataURL(file);
   };
 
-  // ── Added: Remove Image Handler ──
   const handleRemoveImage = () => {
     setImagePreview('');
     setDraft(prev => ({ ...prev, profilePicture: '' }));
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const setField  = (k, v) => setDraft(prev => ({ ...prev, [k]: v }));
-  const setSocial = (k, v) => setDraft(prev => ({ ...prev, socials: { ...prev.socials, [k]: v } }));
+  const setField  = (k, v) => {
+    setDraft(prev => ({ ...prev, [k]: v }));
+    if (errors[k]) setErrors(prev => { const n = { ...prev }; delete n[k]; return n; });
+  };
+  const setSocial = (k, v) => {
+    setDraft(prev => ({ ...prev, socials: { ...prev.socials, [k]: v } }));
+    if (errors[k]) setErrors(prev => { const n = { ...prev }; delete n[k]; return n; });
+  };
 
   const handleSave = async () => {
-    if (!draft.firstName.trim() || !draft.lastName.trim()) {
-      toast({ title: 'Validation', description: 'First and last name are required.', variant: 'destructive' }); return;
+    // ── Full field-level validation ───────────────────────────────────────────
+    const e = {};
+
+    // First Name: required, letters only, 2-50 chars
+    if (!draft.firstName.trim()) {
+      e.firstName = 'First name is required';
+    } else if (!/^[a-zA-Z\s'\-]{2,50}$/.test(draft.firstName.trim())) {
+      e.firstName = 'First name must be 2–50 letters only';
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email)) {
-      toast({ title: 'Validation', description: 'Enter a valid email address.', variant: 'destructive' }); return;
+
+    // Last Name: required, letters only, 1-50 chars
+    if (!draft.lastName.trim()) {
+      e.lastName = 'Last name is required';
+    } else if (!/^[a-zA-Z\s'\-]{1,50}$/.test(draft.lastName.trim())) {
+      e.lastName = 'Last name must be letters only';
+    }
+
+    // Email: required + valid format
+    if (!draft.email.trim()) {
+      e.email = 'Email address is required';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(draft.email.trim())) {
+      e.email = 'Enter a valid email (e.g. name@example.com)';
+    }
+
+    // Phone: optional, valid 10-digit Indian mobile if filled
+    if (draft.phone.trim()) {
+      const ph = draft.phone.replace(/[\s\-+()]/g, '');
+      if (!/^[6-9]\d{9}$/.test(ph)) {
+        e.phone = 'Enter a valid 10-digit mobile number (starts with 6–9)';
+      }
+    }
+
+    // Location: optional, min 2 chars if filled
+    if (draft.location.trim() && draft.location.trim().length < 2) {
+      e.location = 'Location must be at least 2 characters';
+    } else if (draft.location.trim() && draft.location.trim().length > 100) {
+      e.location = 'Location must be under 100 characters';
+    }
+
+    // Bio: optional, max 500 chars
+    if (draft.bio.trim().length > 500) {
+      e.bio = 'Bio must be under 500 characters';
+    }
+
+    // Experience: optional, must be a number 0-50 if looks numeric
+    if (draft.experience.trim()) {
+      const expNum = parseFloat(draft.experience);
+      if (!isNaN(expNum) && (expNum < 0 || expNum > 50)) {
+        e.experience = 'Experience must be between 0 and 50 years';
+      }
+    }
+
+    // LinkedIn: optional, valid URL format if filled
+    if (draft.socials?.linkedin.trim() && !/^(https?:\/\/)?(www\.)?linkedin\.com\/.+$/.test(draft.socials.linkedin.trim())) {
+      e.linkedin = 'Enter a valid LinkedIn URL (e.g. linkedin.com/in/you)';
+    }
+
+    // Twitter: optional, valid URL format if filled
+    if (draft.socials?.twitter.trim() && !/^(https?:\/\/)?(www\.)?(twitter|x)\.com\/.+$/.test(draft.socials.twitter.trim())) {
+      e.twitter = 'Enter a valid Twitter URL (e.g. twitter.com/you)';
+    }
+
+    setErrors(e);
+    if (Object.keys(e).length > 0) {
+      toast({ title: 'Please fix the errors below', description: `${Object.keys(e).length} field(s) need attention.`, variant: 'destructive' });
+      return;
     }
     setSaving(true);
     try {
@@ -194,7 +270,7 @@ export default function RecruiterProfile() {
     } finally { setSaving(false); }
   };
 
-  const handleCancelEdit = () => { setDraft({ ...profile }); setImagePreview(profile.profilePicture); setIsEditing(false); };
+  const handleCancelEdit = () => { setDraft({ ...profile }); setImagePreview(profile.profilePicture); setIsEditing(false); setErrors({}); };
 
   const displayName = (fn, ln) => `${fn} ${ln}`.trim() || 'Your Name';
   const initials    = (fn, ln) => ((fn?.[0] || '') + (ln?.[0] || '')).toUpperCase() || 'U';
@@ -204,17 +280,12 @@ export default function RecruiterProfile() {
   const val    = (k) => isEditing ? draft[k]               : profile[k];
   const social = (k) => isEditing ? (draft.socials?.[k] || '') : (profile.socials?.[k] || '');
 
-  const inp = (ro) =>
+  const inp = (ro, hasErr = false) =>
     `w-full px-3 py-2 rounded-lg border text-sm outline-none transition
      ${ro ? 'bg-slate-50 text-slate-500 cursor-not-allowed border-slate-200'
-           : 'bg-white border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500'}`;
-
-  const Field = ({ label, children }) => (
-    <div className="space-y-1">
-      <label className="text-sm font-medium text-slate-700">{label}</label>
-      {children}
-    </div>
-  );
+           : hasErr
+             ? 'bg-white border-red-400 focus:ring-2 focus:ring-red-400 focus:border-red-400'
+             : 'bg-white border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500'}`;
 
   if (profileLoading) {
     return (
@@ -375,31 +446,38 @@ export default function RecruiterProfile() {
                     <User className="h-5 w-5 text-blue-600" /> Basic Information
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Field label="First Name *">
-                      <input className={inp(!isEditing)} value={val('firstName')}
+                    <Field label="First Name *" error={isEditing && errors.firstName}>
+                      <input className={inp(!isEditing, !!errors.firstName)} value={val('firstName')}
                         onChange={e => setField('firstName', e.target.value)} disabled={!isEditing} placeholder="First name" />
                     </Field>
-                    <Field label="Last Name *">
-                      <input className={inp(!isEditing)} value={val('lastName')}
+                    <Field label="Last Name *" error={isEditing && errors.lastName}>
+                      <input className={inp(!isEditing, !!errors.lastName)} value={val('lastName')}
                         onChange={e => setField('lastName', e.target.value)} disabled={!isEditing} placeholder="Last name" />
                     </Field>
-                    <Field label="Email *">
-                      <input type="email" className={inp(!isEditing)} value={val('email')}
+                    <Field label="Email *" error={isEditing && errors.email}>
+                      <input type="email" className={inp(!isEditing, !!errors.email)} value={val('email')}
                         onChange={e => setField('email', e.target.value)} disabled={!isEditing} placeholder="you@example.com" />
                     </Field>
-                    <Field label="Phone">
-                      <input className={inp(!isEditing)} value={val('phone')}
-                        onChange={e => setField('phone', e.target.value)} disabled={!isEditing} placeholder="+1 (555) 123-4567" />
+                    <Field label="Phone" error={isEditing && errors.phone}>
+                      <input className={inp(!isEditing, !!errors.phone)} value={val('phone')}
+                        onChange={e => setField('phone', e.target.value)} disabled={!isEditing} placeholder="e.g. 9876543210" />
                     </Field>
-                    <Field label="Location">
-                      <input className={inp(!isEditing)} value={val('location')}
-                        onChange={e => setField('location', e.target.value)} disabled={!isEditing} placeholder="City, Country" />
+                    <Field label="Location" error={isEditing && errors.location}>
+                      <input
+                        className={inp(!isEditing, !!errors.location)}
+                        value={isEditing ? draft.location : profile.location}
+                        onChange={e => setField('location', e.target.value)}
+                        disabled={!isEditing}
+                        placeholder="City, Country"
+                        autoComplete="off"
+                      />
                     </Field>
                     <div className="col-span-1 md:col-span-2 space-y-1">
                       <label className="text-sm font-medium text-slate-700">Bio</label>
                       <Textarea value={val('bio')} onChange={e => setField('bio', e.target.value)}
                         disabled={!isEditing} rows={3} placeholder="Tell us about yourself…"
-                        className={`text-sm resize-none ${!isEditing ? 'bg-slate-50 cursor-not-allowed opacity-70' : 'focus:ring-blue-500'}`} />
+                        className={`text-sm resize-none ${!isEditing ? 'bg-slate-50 cursor-not-allowed opacity-70' : errors.bio ? 'border-red-400 focus:ring-red-400' : 'focus:ring-blue-500'}`} />
+                      {isEditing && <div className="flex justify-between mt-0.5"><span className={`text-xs ${errors.bio ? 'text-red-500' : 'text-slate-400'}`}>{errors.bio || ''}</span><span className="text-xs text-slate-400">{(draft.bio||"").length}/500</span></div>}
                     </div>
                   </div>
                 </div>
@@ -413,8 +491,8 @@ export default function RecruiterProfile() {
                       <input className={inp(!isEditing)} value={val('specialization')}
                         onChange={e => setField('specialization', e.target.value)} disabled={!isEditing} placeholder="e.g., Tech Recruiting" />
                     </Field>
-                    <Field label="Years of Experience">
-                      <input className={inp(!isEditing)} value={val('experience')}
+                    <Field label="Years of Experience" error={isEditing && errors.experience}>
+                      <input className={inp(!isEditing, !!errors.experience)} value={val('experience')}
                         onChange={e => setField('experience', e.target.value)} disabled={!isEditing} placeholder="e.g., 5 years" />
                     </Field>
                   </div>
@@ -429,8 +507,8 @@ export default function RecruiterProfile() {
                       { key: 'linkedin', Icon: Linkedin, label: 'LinkedIn', ph: 'linkedin.com/in/you' },
                       { key: 'twitter',  Icon: Twitter,  label: 'Twitter',  ph: 'twitter.com/you' },
                     ].map(({ key, Icon, label, ph }) => (
-                      <Field key={key} label={<span className="flex items-center gap-1"><Icon className="h-3.5 w-3.5" />{label}</span>}>
-                        <input className={inp(!isEditing)} value={social(key)}
+                      <Field key={key} label={<span className="flex items-center gap-1"><Icon className="h-3.5 w-3.5" />{label}</span>} error={isEditing && errors[key]}>
+                        <input className={inp(!isEditing, !!(isEditing && errors[key]))} value={social(key)}
                           onChange={e => setSocial(key, e.target.value)} disabled={!isEditing} placeholder={ph} />
                       </Field>
                     ))}
@@ -454,7 +532,7 @@ export default function RecruiterProfile() {
             </div>
           </TabsContent>
 
-          {/* Performance Tab (Unchanged) */}
+          {/* Performance Tab */}
           <TabsContent value="performance">
             {statsLoading ? (
               <div className="flex items-center justify-center py-24">

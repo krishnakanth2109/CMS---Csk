@@ -258,14 +258,90 @@ export default function AdminCandidates() {
   const validateForm = () => {
     const e = {};
     const d = formData;
-    if (!d.firstName.trim()) e.firstName = 'First Name required';
-    if (!d.lastName.trim()) e.lastName = 'Last Name required';
-    if (!d.email.trim()) e.email = 'Email required';
-    if (!d.contact.trim()) e.contact = 'Phone required';
-    if (!d.position.trim()) e.position = 'Role required';
-    if (!d.client.trim()) e.client = 'Client required';
-    if (d.servingNoticePeriod === 'true' && !d.lwd) e.lwd = 'LWD required';
-    if (d.offersInHand === 'true' && !d.offerPackage) e.offerPackage = 'Enter offer package';
+
+    // ── First Name: required, letters/spaces/hyphens only, 2-50 chars ─────────
+    if (!d.firstName.trim()) {
+      e.firstName = 'First Name is required';
+    } else if (!/^[a-zA-Z\s'\-]{2,50}$/.test(d.firstName.trim())) {
+      e.firstName = 'First Name must be 2–50 characters (letters only)';
+    }
+
+    // ── Last Name: required, letters/spaces/hyphens only ──────────────────────
+    if (!d.lastName.trim()) {
+      e.lastName = 'Last Name is required';
+    } else if (!/^[a-zA-Z\s'\-]{1,50}$/.test(d.lastName.trim())) {
+      e.lastName = 'Last Name must be letters only';
+    }
+
+    // ── Email: required + valid format ────────────────────────────────────────
+    if (!d.email.trim()) {
+      e.email = 'Email address is required';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(d.email.trim())) {
+      e.email = 'Enter a valid email (e.g. name@example.com)';
+    }
+
+    // ── Contact: required, 10-digit Indian mobile (starts 6-9) ───────────────
+    if (!d.contact.trim()) {
+      e.contact = 'Contact number is required';
+    } else if (!/^[6-9]\d{9}$/.test(d.contact.replace(/[\s\-+]/g, ''))) {
+      e.contact = 'Enter a valid 10-digit Indian mobile number (starts with 6–9)';
+    }
+
+    // ── Alternate Number: optional, validate format if filled ─────────────────
+    if (d.alternateNumber.trim()) {
+      if (!/^[6-9]\d{9}$/.test(d.alternateNumber.replace(/[\s\-+]/g, ''))) {
+        e.alternateNumber = 'Enter a valid 10-digit mobile number';
+      } else if (d.contact.replace(/[\s\-+]/g, '') === d.alternateNumber.replace(/[\s\-+]/g, '')) {
+        e.alternateNumber = 'Alternate number must be different from primary contact';
+      }
+    }
+
+    // ── Position: required, min 2 chars ──────────────────────────────────────
+    if (!d.position.trim()) {
+      e.position = 'Role / Position is required';
+    } else if (d.position.trim().length < 2) {
+      e.position = 'Position must be at least 2 characters';
+    }
+
+    // ── Client: required ─────────────────────────────────────────────────────
+    if (!d.client.trim()) e.client = 'Please select a Client';
+
+    // ── Total Experience: optional, must be a positive number 0–60 ───────────
+    if (d.totalExperience.trim() !== '') {
+      const totalExp = Number(d.totalExperience);
+      if (isNaN(totalExp) || !/^\d+(\.\d+)?$/.test(d.totalExperience.trim())) {
+        e.totalExperience = 'Must be a number (e.g. 5 or 5.5)';
+      } else if (totalExp < 0 || totalExp > 60) {
+        e.totalExperience = 'Experience must be between 0 and 60 years';
+      }
+    }
+
+    // ── Relevant Experience: optional, numeric, cannot exceed total ───────────
+    if (d.relevantExperience.trim() !== '') {
+      const relExp = Number(d.relevantExperience);
+      if (isNaN(relExp) || !/^\d+(\.\d+)?$/.test(d.relevantExperience.trim())) {
+        e.relevantExperience = 'Must be a number (e.g. 3 or 3.5)';
+      } else if (relExp < 0 || relExp > 60) {
+        e.relevantExperience = 'Experience must be between 0 and 60 years';
+      } else if (
+        d.totalExperience.trim() !== '' &&
+        !isNaN(Number(d.totalExperience)) &&
+        relExp > Number(d.totalExperience)
+      ) {
+        e.relevantExperience = 'Relevant experience cannot exceed total experience';
+      }
+    }
+
+    // ── Conditional: LWD required when serving notice ─────────────────────────
+    if (d.servingNoticePeriod === 'true' && !d.lwd) {
+      e.lwd = 'Last Working Day is required when serving notice period';
+    }
+
+    // ── Conditional: offer package required when offer in hand ────────────────
+    if (d.offersInHand === 'true' && !d.offerPackage.trim()) {
+      e.offerPackage = 'Please enter the offer package amount';
+    }
+
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -798,7 +874,8 @@ export default function AdminCandidates() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1 text-slate-700">Alternate Number</label>
-                    <input type="text" value={formData.alternateNumber} onChange={(e) => handleInputChange('alternateNumber', e.target.value)} className={inputCls(false)} />
+                    <input type="text" value={formData.alternateNumber} onChange={(e) => handleInputChange('alternateNumber', e.target.value)} className={inputCls(errors.alternateNumber)} placeholder="e.g. 9876543210" />
+                    {errors.alternateNumber && <p className="text-xs text-red-500 mt-1">{errors.alternateNumber}</p>}
                   </div>
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium mb-1 text-slate-700">Email Address *</label>
@@ -844,11 +921,13 @@ export default function AdminCandidates() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1 text-slate-700">Total Experience (Years)</label>
-                    <input type="text" value={formData.totalExperience} onChange={(e) => handleInputChange('totalExperience', e.target.value)} className={inputCls(false)} placeholder="e.g. 5" />
+                    <input type="text" value={formData.totalExperience} onChange={(e) => handleInputChange('totalExperience', e.target.value)} className={inputCls(errors.totalExperience)} placeholder="e.g. 5" />
+                    {errors.totalExperience && <p className="text-xs text-red-500 mt-1">{errors.totalExperience}</p>}
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1 text-slate-700">Relevant Experience (Years)</label>
-                    <input type="text" value={formData.relevantExperience} onChange={(e) => handleInputChange('relevantExperience', e.target.value)} className={inputCls(false)} placeholder="e.g. 3" />
+                    <input type="text" value={formData.relevantExperience} onChange={(e) => handleInputChange('relevantExperience', e.target.value)} className={inputCls(errors.relevantExperience)} placeholder="e.g. 3" />
+                    {errors.relevantExperience && <p className="text-xs text-red-500 mt-1">{errors.relevantExperience}</p>}
                   </div>
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium mb-1 text-slate-700">Skills (Comma Separated)</label>

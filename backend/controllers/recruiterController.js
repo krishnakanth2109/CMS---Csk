@@ -364,3 +364,26 @@ export const toggleRecruiterStatus = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// @desc    Get users by role — used by messaging pages to build recipient lists
+// @route   GET /api/recruiters/by-role?role=manager   → Navya, Sanjay
+// @route   GET /api/recruiters/by-role?role=recruiter → Varun, Lahitya, Akhila, Hema
+// @access  Private
+// ─────────────────────────────────────────────────────────────────────────────
+export const getUsersByRole = async (req, res) => {
+  try {
+    const { role } = req.query;
+    const filter = role
+      ? { role, active: true }
+      : { role: { $in: ['manager', 'recruiter'] }, active: true };
+
+    const users = await User.find(filter)
+      .select('_id firstName lastName username email role')
+      .sort({ firstName: 1 });
+
+    res.json(users);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};

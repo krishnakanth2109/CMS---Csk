@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
@@ -114,7 +114,6 @@ export default function AdminRequirements() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedClientFilter, setSelectedClientFilter] = useState("");
 
-  // Exact 14 fields requested
   const initialFormState = {
     jobCode: "", clientName: "", position: "", location: "",
     experience: "", relevantExperience: "", qualification: "",
@@ -128,6 +127,58 @@ export default function AdminRequirements() {
   const [selectedJob, setSelectedJob] = useState(null);
   const [editingJob, setEditingJob] = useState(null);
   const [showForm, setShowForm] = useState(false);
+
+  // ─── SCROLLBAR SYNC REFS & LOGIC ───────────────────────────────────────
+  const topScrollRef = useRef(null);
+  const bottomScrollRef = useRef(null);
+  const tableRef = useRef(null);
+  const [scrollWidth, setScrollWidth] = useState('100%');
+  
+  const isSyncingTop = useRef(false);
+  const isSyncingBottom = useRef(false);
+
+  useEffect(() => {
+    const tableEl = tableRef.current;
+    if (!tableEl) return;
+
+    const updateWidth = () => {
+      setScrollWidth(`${tableEl.scrollWidth}px`);
+    };
+
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(tableEl);
+    
+    updateWidth();
+
+    window.addEventListener('resize', updateWidth);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateWidth);
+    };
+  }, [jobs, searchTerm, selectedClientFilter, showForm]);
+
+  const handleTopScroll = (e) => {
+    if (isSyncingTop.current) {
+      isSyncingTop.current = false;
+      return;
+    }
+    if (bottomScrollRef.current) {
+      isSyncingBottom.current = true;
+      bottomScrollRef.current.scrollLeft = e.target.scrollLeft;
+    }
+  };
+
+  const handleBottomScroll = (e) => {
+    if (isSyncingBottom.current) {
+      isSyncingBottom.current = false;
+      return;
+    }
+    if (topScrollRef.current) {
+      isSyncingTop.current = true;
+      topScrollRef.current.scrollLeft = e.target.scrollLeft;
+    }
+  };
+  // ───────────────────────────────────────────────────────────────────────
 
   const fetchData = async () => {
     setLoading(true);
@@ -237,7 +288,6 @@ export default function AdminRequirements() {
     }
   };
 
-  // Filter Logic applying both Text Search and Client Dropdown
   const filteredJobs = jobs.filter(j => {
     const matchesSearch = j.position.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           j.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -249,313 +299,350 @@ export default function AdminRequirements() {
   });
 
   return (
-    <div className="flex-1 p-6 space-y-8  dark:bg-zinc-950 min-h-screen text-zinc-900 dark:text-zinc-100">
+    // Fixed container to prevent unwanted global horizontal scroll
+    <div className="flex-1 grid grid-cols-1 min-w-0 w-full p-6 space-y-8 overflow-y-auto overflow-x-hidden bg-slate-50 dark:bg-zinc-950 min-h-screen text-zinc-900 dark:text-zinc-100">
       
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">Job Requirements</h1>
-          <p className="text-zinc-500 dark:text-zinc-400 mt-1">Manage active openings and allocations</p>
-        </div>
-        <button
-          onClick={() => {
-            setEditingJob(null);
-            setShowForm(!showForm);
-            setForm(initialFormState);
-            setErrors({});
-          }}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 rounded-lg text-sm font-medium hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-all shadow-sm"
-        >
-          {showForm ? <XMarkIcon className="w-4 h-4" /> : <PlusIcon className="w-4 h-4" />}
-          {showForm ? "Cancel" : "Add Requirement"}
-        </button>
-      </div>
-
-      {/* Form Section */}
-      <AnimatePresence>
-        {showForm && (
-          <motion.div 
-            initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, height: 0 }}
-            className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm p-6 overflow-hidden"
+      <div className="w-full max-w-full mx-auto space-y-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">Job Requirements</h1>
+            <p className="text-zinc-500 dark:text-zinc-400 mt-1">Manage active openings and allocations</p>
+          </div>
+          <button
+            onClick={() => {
+              setEditingJob(null);
+              setShowForm(!showForm);
+              setForm(initialFormState);
+              setErrors({});
+            }}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 rounded-lg text-sm font-medium hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-all shadow-sm"
           >
-            <h3 className="font-semibold text-lg mb-6 border-b border-zinc-100 dark:border-zinc-800 pb-3 text-zinc-900 dark:text-white">
-              {editingJob ? "Edit Job Requirement" : "Create New Requirement"}
-            </h3>
-            
-            <div className="grid md:grid-cols-4 gap-5">
+            {showForm ? <XMarkIcon className="w-4 h-4" /> : <PlusIcon className="w-4 h-4" />}
+            {showForm ? "Cancel" : "Add Requirement"}
+          </button>
+        </div>
+
+        {/* Form Section */}
+        <AnimatePresence>
+          {showForm && (
+            <motion.div 
+              initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, height: 0 }}
+              className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm p-6 overflow-hidden"
+            >
+              <h3 className="font-semibold text-lg mb-6 border-b border-zinc-100 dark:border-zinc-800 pb-3 text-zinc-900 dark:text-white">
+                {editingJob ? "Edit Job Requirement" : "Create New Requirement"}
+              </h3>
               
-              {/* 1. Job Code */}
-              <div className="md:col-span-1">
-                <label className="block text-xs font-medium text-zinc-500 mb-1">1. Job Code *</label>
-                <input name="jobCode" placeholder="E.g. JB1001" value={form.jobCode} onChange={handleChange} className={`${inputCls} ${errors.jobCode ? "border-red-500" : ""}`} />
-                {errors.jobCode && <p className="text-xs text-red-500 mt-1">{errors.jobCode}</p>}
+              <div className="grid md:grid-cols-4 gap-5">
+                {/* 1. Job Code */}
+                <div className="md:col-span-1">
+                  <label className="block text-xs font-medium text-zinc-500 mb-1">1. Job Code *</label>
+                  <input name="jobCode" placeholder="E.g. JB1001" value={form.jobCode} onChange={handleChange} className={`${inputCls} ${errors.jobCode ? "border-red-500" : ""}`} />
+                  {errors.jobCode && <p className="text-xs text-red-500 mt-1">{errors.jobCode}</p>}
+                </div>
+
+                {/* 2. Client */}
+                <div className="md:col-span-1">
+                  <label className="block text-xs font-medium text-zinc-500 mb-1">2. Client *</label>
+                  <select name="clientName" value={form.clientName} onChange={handleChange} className={`${inputCls} ${errors.clientName ? "border-red-500" : ""}`}>
+                    <option value="">Select Client</option>
+                    {clients.map(c => <option key={c.id} value={c.companyName}>{c.companyName}</option>)}
+                  </select>
+                  {errors.clientName && <p className="text-xs text-red-500 mt-1">{errors.clientName}</p>}
+                </div>
+
+                {/* 3. Role / Position */}
+                <div className="md:col-span-1">
+                  <label className="block text-xs font-medium text-zinc-500 mb-1">3. Role / Position *</label>
+                  <input name="position" placeholder="Job Title" value={form.position} onChange={handleChange} className={`${inputCls} ${errors.position ? "border-red-500" : ""}`} />
+                  {errors.position && <p className="text-xs text-red-500 mt-1">{errors.position}</p>}
+                </div>
+
+                {/* 4. Location */}
+                <div className="md:col-span-1">
+                  <label className="block text-xs font-medium text-zinc-500 mb-1">4. Location *</label>
+                  <input name="location" placeholder="City / Remote" value={form.location} onChange={handleChange} className={`${inputCls} ${errors.location ? "border-red-500" : ""}`} />
+                  {errors.location && <p className="text-xs text-red-500 mt-1">{errors.location}</p>}
+                </div>
+
+                {/* 5. Experience */}
+                <div className="md:col-span-1">
+                  <label className="block text-xs font-medium text-zinc-500 mb-1">5. Experience *</label>
+                  <input name="experience" placeholder="E.g. 3-5 Years" value={form.experience} onChange={handleChange} className={`${inputCls} ${errors.experience ? "border-red-500" : ""}`} />
+                  {errors.experience && <p className="text-xs text-red-500 mt-1">{errors.experience}</p>}
+                </div>
+
+                {/* 6. Relevant Experience */}
+                <div className="md:col-span-1">
+                  <label className="block text-xs font-medium text-zinc-500 mb-1">6. Relevant Experience</label>
+                  <input name="relevantExperience" placeholder="E.g. 2 Years" value={form.relevantExperience} onChange={handleChange} className={inputCls} />
+                </div>
+
+                {/* 7. Educational Qualification */}
+                <div className="md:col-span-1">
+                  <label className="block text-xs font-medium text-zinc-500 mb-1">7. Educational Qualification</label>
+                  <input name="qualification" placeholder="E.g. B.Tech / MBA" value={form.qualification} onChange={handleChange} className={inputCls} />
+                </div>
+
+                {/* 8. Maximum Salary Range */}
+                <div className="md:col-span-1">
+                  <label className="block text-xs font-medium text-zinc-500 mb-1">8. Maximum Salary Range *</label>
+                  <input name="salaryBudget" placeholder="E.g. 10-12 LPA" value={form.salaryBudget} onChange={handleChange} className={`${inputCls} ${errors.salaryBudget ? "border-red-500" : ""}`} />
+                  {errors.salaryBudget && <p className="text-xs text-red-500 mt-1">{errors.salaryBudget}</p>}
+                </div>
+
+                {/* 9. Gender */}
+                <div className="md:col-span-1">
+                  <label className="block text-xs font-medium text-zinc-500 mb-1">9. Gender Preference</label>
+                  <select name="gender" value={form.gender} onChange={handleChange} className={inputCls}>
+                    <option value="Any">Any</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                  </select>
+                </div>
+
+                {/* 10. N/P (Notice Period) */}
+                <div className="md:col-span-1">
+                  <label className="block text-xs font-medium text-zinc-500 mb-1">10. N/P (Notice Period)</label>
+                  <input name="noticePeriod" placeholder="E.g. 15 Days, Immediate" value={form.noticePeriod} onChange={handleChange} className={inputCls} />
+                </div>
+
+                {/* 11. Primary Recruiter */}
+                <div className="md:col-span-1">
+                  <label className="block text-xs font-medium text-zinc-500 mb-1">11. Primary Recruiter</label>
+                  <select name="primaryRecruiter" value={form.primaryRecruiter} onChange={handleChange} className={inputCls}>
+                    <option value="">Select Recruiter</option>
+                    {recruiters.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
+                  </select>
+                </div>
+
+                {/* 12. Secondary Recruiter */}
+                <div className="md:col-span-1">
+                  <label className="block text-xs font-medium text-zinc-500 mb-1">12. Secondary Recruiter</label>
+                  <select name="secondaryRecruiter" value={form.secondaryRecruiter} onChange={handleChange} className={inputCls}>
+                    <option value="">Select Recruiter</option>
+                    {recruiters.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
+                  </select>
+                </div>
+
+                {/* 13. Skills */}
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-medium text-zinc-500 mb-1">13. Skills *</label>
+                  <input name="skills" placeholder="React, Node.js, etc." value={form.skills} onChange={handleChange} className={`${inputCls} ${errors.skills ? "border-red-500" : ""}`} />
+                  {errors.skills && <p className="text-xs text-red-500 mt-1">{errors.skills}</p>}
+                </div>
+
+                {/* 14. JD Link (Optional) */}
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-medium text-zinc-500 mb-1">14. JD Link (Optional)</label>
+                  <input name="jdLink" placeholder="https://..." value={form.jdLink} onChange={handleChange} className={`${inputCls} ${errors.jdLink ? "border-red-500" : ""}`} />
+                  {errors.jdLink && <p className="text-xs text-red-500 mt-1">{errors.jdLink}</p>}
+                </div>
               </div>
 
-              {/* 2. Client */}
-              <div className="md:col-span-1">
-                <label className="block text-xs font-medium text-zinc-500 mb-1">2. Client *</label>
-                <select name="clientName" value={form.clientName} onChange={handleChange} className={`${inputCls} ${errors.clientName ? "border-red-500" : ""}`}>
-                  <option value="">Select Client</option>
-                  {clients.map(c => <option key={c.id} value={c.companyName}>{c.companyName}</option>)}
-                </select>
-                {errors.clientName && <p className="text-xs text-red-500 mt-1">{errors.clientName}</p>}
+              <div className="flex justify-end pt-5 mt-4 border-t border-zinc-100 dark:border-zinc-800">
+                <button onClick={handleSubmit} className="px-6 py-2 bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 rounded-lg text-sm font-medium hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-all shadow-sm">
+                  {editingJob ? "Update Requirement" : "Save Requirement"}
+                </button>
               </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-              {/* 3. Role / Position */}
-              <div className="md:col-span-1">
-                <label className="block text-xs font-medium text-zinc-500 mb-1">3. Role / Position *</label>
-                <input name="position" placeholder="Job Title" value={form.position} onChange={handleChange} className={`${inputCls} ${errors.position ? "border-red-500" : ""}`} />
-                {errors.position && <p className="text-xs text-red-500 mt-1">{errors.position}</p>}
-              </div>
-
-              {/* 4. Location */}
-              <div className="md:col-span-1">
-                <label className="block text-xs font-medium text-zinc-500 mb-1">4. Location *</label>
-                <input name="location" placeholder="City / Remote" value={form.location} onChange={handleChange} className={`${inputCls} ${errors.location ? "border-red-500" : ""}`} />
-                {errors.location && <p className="text-xs text-red-500 mt-1">{errors.location}</p>}
-              </div>
-
-              {/* 5. Experience */}
-              <div className="md:col-span-1">
-                <label className="block text-xs font-medium text-zinc-500 mb-1">5. Experience *</label>
-                <input name="experience" placeholder="E.g. 3-5 Years" value={form.experience} onChange={handleChange} className={`${inputCls} ${errors.experience ? "border-red-500" : ""}`} />
-                {errors.experience && <p className="text-xs text-red-500 mt-1">{errors.experience}</p>}
-              </div>
-
-              {/* 6. Relevant Experience */}
-              <div className="md:col-span-1">
-                <label className="block text-xs font-medium text-zinc-500 mb-1">6. Relevant Experience</label>
-                <input name="relevantExperience" placeholder="E.g. 2 Years" value={form.relevantExperience} onChange={handleChange} className={inputCls} />
-              </div>
-
-              {/* 7. Educational Qualification */}
-              <div className="md:col-span-1">
-                <label className="block text-xs font-medium text-zinc-500 mb-1">7. Educational Qualification</label>
-                <input name="qualification" placeholder="E.g. B.Tech / MBA" value={form.qualification} onChange={handleChange} className={inputCls} />
-              </div>
-
-              {/* 8. Maximum Salary Range */}
-              <div className="md:col-span-1">
-                <label className="block text-xs font-medium text-zinc-500 mb-1">8. Maximum Salary Range *</label>
-                <input name="salaryBudget" placeholder="E.g. 10-12 LPA" value={form.salaryBudget} onChange={handleChange} className={`${inputCls} ${errors.salaryBudget ? "border-red-500" : ""}`} />
-                {errors.salaryBudget && <p className="text-xs text-red-500 mt-1">{errors.salaryBudget}</p>}
-              </div>
-
-              {/* 9. Gender */}
-              <div className="md:col-span-1">
-                <label className="block text-xs font-medium text-zinc-500 mb-1">9. Gender Preference</label>
-                <select name="gender" value={form.gender} onChange={handleChange} className={inputCls}>
-                  <option value="Any">Any</option>
-                  <option value="Male">Male</option>
-                  <option value="Female">Female</option>
-                </select>
-              </div>
-
-              {/* 10. N/P (Notice Period) */}
-              <div className="md:col-span-1">
-                <label className="block text-xs font-medium text-zinc-500 mb-1">10. N/P (Notice Period)</label>
-                <input name="noticePeriod" placeholder="E.g. 15 Days, Immediate" value={form.noticePeriod} onChange={handleChange} className={inputCls} />
-              </div>
-
-              {/* 11. Primary Recruiter */}
-              <div className="md:col-span-1">
-                <label className="block text-xs font-medium text-zinc-500 mb-1">11. Primary Recruiter</label>
-                <select name="primaryRecruiter" value={form.primaryRecruiter} onChange={handleChange} className={inputCls}>
-                  <option value="">Select Recruiter</option>
-                  {recruiters.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
-                </select>
-              </div>
-
-              {/* 12. Secondary Recruiter */}
-              <div className="md:col-span-1">
-                <label className="block text-xs font-medium text-zinc-500 mb-1">12. Secondary Recruiter</label>
-                <select name="secondaryRecruiter" value={form.secondaryRecruiter} onChange={handleChange} className={inputCls}>
-                  <option value="">Select Recruiter</option>
-                  {recruiters.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
-                </select>
-              </div>
-
-              {/* 13. Skills */}
-              <div className="md:col-span-2">
-                <label className="block text-xs font-medium text-zinc-500 mb-1">13. Skills *</label>
-                <input name="skills" placeholder="React, Node.js, etc." value={form.skills} onChange={handleChange} className={`${inputCls} ${errors.skills ? "border-red-500" : ""}`} />
-                {errors.skills && <p className="text-xs text-red-500 mt-1">{errors.skills}</p>}
-              </div>
-
-              {/* 14. JD Link (Optional) */}
-              <div className="md:col-span-2">
-                <label className="block text-xs font-medium text-zinc-500 mb-1">14. JD Link (Optional)</label>
-                <input name="jdLink" placeholder="https://..." value={form.jdLink} onChange={handleChange} className={`${inputCls} ${errors.jdLink ? "border-red-500" : ""}`} />
-                {errors.jdLink && <p className="text-xs text-red-500 mt-1">{errors.jdLink}</p>}
-              </div>
-            </div>
-
-            <div className="flex justify-end pt-5 mt-4 border-t border-zinc-100 dark:border-zinc-800">
-              <button onClick={handleSubmit} className="px-6 py-2 bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 rounded-lg text-sm font-medium hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-all shadow-sm">
-                {editingJob ? "Update Requirement" : "Save Requirement"}
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Filters & Search Bar */}
-      <div className="bg-white dark:bg-zinc-900 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex flex-col sm:flex-row gap-4 items-center">
-        <div className="w-full sm:flex-1">
-          <input
-            placeholder="Search by Role, Job Code, or Company..."
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-            className={inputCls}
-          />
-        </div>
-        <div className="w-full sm:w-64">
-          <select 
-            value={selectedClientFilter} 
-            onChange={(e) => setSelectedClientFilter(e.target.value)}
-            className={inputCls}
-          >
-            <option value="">All Clients</option>
-            {clients.map(c => (
-              <option key={c.id} value={c.companyName}>{c.companyName}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* New Enhanced Table Section */}
-      {loading ? (
-        <div className="text-center p-12 text-zinc-500 flex flex-col items-center">
-          <div className="w-8 h-8 border-4 border-zinc-300 border-t-zinc-800 rounded-full animate-spin mb-4"></div>
-          Loading jobs...
-        </div>
-      ) : (
-        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-zinc-200 dark:divide-zinc-800 text-left text-sm whitespace-nowrap">
-              <thead className="bg-zinc-50 dark:bg-zinc-900/50 text-xs uppercase text-zinc-500 font-semibold tracking-wider">
-                <tr>
-                  <th className="px-6 py-4">Job Code</th>
-                  <th className="px-6 py-4">Role</th>
-                  <th className="px-6 py-4">Company</th>
-                  <th className="px-6 py-4">Location</th>
-                  <th className="px-6 py-4">Primary Recruiter</th>
-                  <th className="px-6 py-4">Secondary Recruiter</th>
-                  <th className="px-6 py-4">Date Added</th>
-                  <th className="px-6 py-4 text-center">Status</th>
-                  <th className="px-6 py-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
-                {filteredJobs.length === 0 ? (
-                  <tr><td colSpan={9} className="text-center py-12 text-zinc-400">No requirements found.</td></tr>
-                ) : filteredJobs.map(job => (
-                  <tr key={job.id} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/20 transition-colors">
-                    
-                    {/* Job Code */}
-                    <td className="px-6 py-4">
-                      <span className="inline-flex items-center bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 px-2.5 py-1 rounded text-xs border border-zinc-200 dark:border-zinc-700 font-mono font-medium">
-                        {job.jobCode}
-                      </span>
-                    </td>
-
-                    {/* Role */}
-                    <td className="px-6 py-4">
-                      <div className="font-bold text-zinc-900 dark:text-zinc-100 text-base">{job.position}</div>
-                    </td>
-
-                    {/* Company */}
-                    <td className="px-6 py-4">
-                      <div className="font-semibold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
-                         <BuildingOfficeIcon className="w-4 h-4 text-zinc-400" />
-                         {job.clientName}
-                      </div>
-                    </td>
-
-                    {/* Location */}
-                    <td className="px-6 py-4">
-                      <div className="text-sm text-zinc-600 dark:text-zinc-400 flex items-center gap-1.5">
-                         <MapPinIcon className="w-4 h-4 text-zinc-400" />
-                         {job.location || 'N/A'}
-                      </div>
-                    </td>
-
-                    {/* Primary Recruiter */}
-                    <td className="px-6 py-4">
-                      {job.primaryRecruiter ? (
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-7 h-7 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 flex items-center justify-center text-xs font-bold border border-blue-200 dark:border-blue-800">
-                            {job.primaryRecruiter.charAt(0).toUpperCase()}
-                          </div>
-                          <span className="font-medium text-zinc-700 dark:text-zinc-300">{job.primaryRecruiter}</span>
-                        </div>
-                      ) : (
-                        <span className="inline-flex items-center px-2 py-1 rounded bg-zinc-50 dark:bg-zinc-800/50 text-zinc-400 text-xs border border-dashed border-zinc-200 dark:border-zinc-700">
-                          Unassigned
-                        </span>
-                      )}
-                    </td>
-
-                    {/* Secondary Recruiter */}
-                    <td className="px-6 py-4">
-                      {job.secondaryRecruiter ? (
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-7 h-7 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 flex items-center justify-center text-xs font-bold border border-purple-200 dark:border-purple-800">
-                            {job.secondaryRecruiter.charAt(0).toUpperCase()}
-                          </div>
-                          <span className="font-medium text-zinc-700 dark:text-zinc-300">{job.secondaryRecruiter}</span>
-                        </div>
-                      ) : (
-                        <span className="inline-flex items-center px-2 py-1 rounded bg-zinc-50 dark:bg-zinc-800/50 text-zinc-400 text-xs border border-dashed border-zinc-200 dark:border-zinc-700">
-                          Unassigned
-                        </span>
-                      )}
-                    </td>
-
-                    {/* Date Added */}
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-zinc-500 dark:text-zinc-400">
-                      <div className="flex items-center gap-1.5">
-                        <CalendarIcon className="w-4 h-4" />
-                        {job.createdAt || job.dateAdded 
-                          ? new Date(job.createdAt || job.dateAdded).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) 
-                          : 'N/A'
-                        }
-                      </div>
-                    </td>
-
-                    {/* Status */}
-                    <td className="px-6 py-4 text-center">
-                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${
-                        job.active !== false 
-                          ? "bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800/50" 
-                          : "bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800/50"
-                      }`}>
-                        {job.active !== false ? "Active" : "Inactive"}
-                      </span>
-                    </td>
-
-                    {/* Actions */}
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button onClick={() => setSelectedJob(job)} title="View Details" className="p-1.5 rounded-lg text-zinc-400 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-zinc-800 dark:hover:text-blue-400 transition-colors">
-                          <EyeIcon className="w-5 h-5" />
-                        </button>
-                        <button onClick={() => handleEditJob(job)} title="Edit Requirement" className="p-1.5 rounded-lg text-zinc-400 hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-zinc-800 dark:hover:text-amber-400 transition-colors">
-                          <PencilIcon className="w-5 h-5" />
-                        </button>
-                        <button onClick={() => handleToggleActive(job)} title={job.active !== false ? "Mark as Inactive" : "Mark as Active"} className={`p-1.5 rounded-lg transition-colors ${job.active !== false ? 'text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-zinc-800 dark:hover:text-red-400' : 'text-zinc-400 hover:bg-green-50 hover:text-green-600 dark:hover:bg-zinc-800 dark:hover:text-green-400'}`}>
-                          {job.active !== false ? <NoSymbolIcon className="w-5 h-5" /> : <CheckCircleIcon className="w-5 h-5" />}
-                        </button>
-                      </div>
-                    </td>
-
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {/* Filters & Search Bar */}
+        <div className="bg-white dark:bg-zinc-900 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex flex-col sm:flex-row gap-4 items-center">
+          <div className="w-full sm:flex-1">
+            <input
+              placeholder="Search by Role, Job Code, or Company..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className={inputCls}
+            />
+          </div>
+          <div className="w-full sm:w-64">
+            <select 
+              value={selectedClientFilter} 
+              onChange={(e) => setSelectedClientFilter(e.target.value)}
+              className={inputCls}
+            >
+              <option value="">All Clients</option>
+              {clients.map(c => (
+                <option key={c.id} value={c.companyName}>{c.companyName}</option>
+              ))}
+            </select>
           </div>
         </div>
-      )}
+
+        {/* Custom Styles for the Dual Scrollbar matching Candidate format */}
+        <style>{`
+          .tbl-scroll::-webkit-scrollbar { height: 10px; }
+          .tbl-scroll::-webkit-scrollbar-track { background: #e2e8f0; border-radius: 10px; }
+          .tbl-scroll::-webkit-scrollbar-thumb { background: #475569; border-radius: 10px; border: 2px solid #e2e8f0; }
+          .tbl-scroll::-webkit-scrollbar-thumb:hover { background: #1e293b; }
+          .tbl-scroll { scrollbar-width: thin; scrollbar-color: #475569 #e2e8f0; }
+          
+          .dark .tbl-scroll::-webkit-scrollbar-track { background: #27272a; }
+          .dark .tbl-scroll::-webkit-scrollbar-thumb { background: #52525b; border-color: #27272a; }
+          .dark .tbl-scroll::-webkit-scrollbar-thumb:hover { background: #71717a; }
+
+          .no-scrollbar::-webkit-scrollbar { display: none; }
+          .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+        `}</style>
+
+        {/* ✅ DUAL SCROLLBAR TABLE CONTAINER */}
+        <div className="w-full border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-sm bg-white dark:bg-zinc-900 flex flex-col relative overflow-hidden">
+          {loading ? (
+            <div className="text-center p-12 text-zinc-500 flex flex-col items-center">
+              <div className="w-8 h-8 border-4 border-zinc-300 border-t-zinc-800 rounded-full animate-spin mb-4"></div>
+              Loading jobs...
+            </div>
+          ) : (
+            <>
+              {/* TOP SCROLLBAR */}
+              <div 
+                ref={topScrollRef} 
+                onScroll={handleTopScroll} 
+                className="tbl-scroll overflow-x-auto overflow-y-hidden border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 z-20 sticky top-0 rounded-t-xl"
+                style={{ height: '18px' }}
+              >
+                <div style={{ width: scrollWidth, height: '1px' }}></div>
+              </div>
+
+              {/* BOTTOM TABLE CONTAINER WITH STICKY HEADER */}
+              <div 
+                ref={bottomScrollRef} 
+                onScroll={handleBottomScroll} 
+                className="no-scrollbar max-h-[calc(100vh-16rem)] min-h-[400px] overflow-auto rounded-b-xl w-full"
+              >
+                {/* 🔴 Added min-w-[1400px] to force horizontal scrolling for many columns */}
+                <table ref={tableRef} className="min-w-[1400px] w-full text-left text-sm whitespace-nowrap border-collapse">
+                  <thead className="bg-zinc-50 dark:bg-zinc-900/80 text-xs uppercase text-zinc-500 font-semibold tracking-wider sticky top-0 z-10 shadow-[0_1px_0_0_#e4e4e7] dark:shadow-[0_1px_0_0_#27272a]">
+                    <tr>
+                      <th className="px-6 py-4 bg-zinc-50 dark:bg-zinc-900">Job Code</th>
+                      <th className="px-6 py-4 bg-zinc-50 dark:bg-zinc-900">Role</th>
+                      <th className="px-6 py-4 bg-zinc-50 dark:bg-zinc-900">Company</th>
+                      <th className="px-6 py-4 bg-zinc-50 dark:bg-zinc-900">Location</th>
+                      <th className="px-6 py-4 bg-zinc-50 dark:bg-zinc-900">Primary Recruiter</th>
+                      <th className="px-6 py-4 bg-zinc-50 dark:bg-zinc-900">Secondary Recruiter</th>
+                      <th className="px-6 py-4 bg-zinc-50 dark:bg-zinc-900">Date Added</th>
+                      <th className="px-6 py-4 bg-zinc-50 dark:bg-zinc-900 text-center">Status</th>
+                      <th className="px-6 py-4 bg-zinc-50 dark:bg-zinc-900 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  
+                  <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/50 bg-white dark:bg-zinc-900">
+                    {filteredJobs.length === 0 ? (
+                      <tr><td colSpan={9} className="text-center py-12 text-zinc-400">No requirements found.</td></tr>
+                    ) : filteredJobs.map(job => (
+                      <tr key={job.id} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/20 transition-colors">
+                        
+                        {/* Job Code */}
+                        <td className="px-6 py-4">
+                          <span className="inline-flex items-center bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 px-2.5 py-1 rounded text-xs border border-zinc-200 dark:border-zinc-700 font-mono font-medium">
+                            {job.jobCode}
+                          </span>
+                        </td>
+
+                        {/* Role */}
+                        <td className="px-6 py-4">
+                          <div className="font-bold text-zinc-900 dark:text-zinc-100 text-base">{job.position}</div>
+                        </td>
+
+                        {/* Company */}
+                        <td className="px-6 py-4">
+                          <div className="font-semibold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                            <BuildingOfficeIcon className="w-4 h-4 text-zinc-400" />
+                            {job.clientName}
+                          </div>
+                        </td>
+
+                        {/* Location */}
+                        <td className="px-6 py-4">
+                          <div className="text-sm text-zinc-600 dark:text-zinc-400 flex items-center gap-1.5">
+                            <MapPinIcon className="w-4 h-4 text-zinc-400" />
+                            {job.location || 'N/A'}
+                          </div>
+                        </td>
+
+                        {/* Primary Recruiter */}
+                        <td className="px-6 py-4">
+                          {job.primaryRecruiter ? (
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-7 h-7 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 flex items-center justify-center text-xs font-bold border border-blue-200 dark:border-blue-800">
+                                {job.primaryRecruiter.charAt(0).toUpperCase()}
+                              </div>
+                              <span className="font-medium text-zinc-700 dark:text-zinc-300">{job.primaryRecruiter}</span>
+                            </div>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-1 rounded bg-zinc-50 dark:bg-zinc-800/50 text-zinc-400 text-xs border border-dashed border-zinc-200 dark:border-zinc-700">
+                              Unassigned
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Secondary Recruiter */}
+                        <td className="px-6 py-4">
+                          {job.secondaryRecruiter ? (
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-7 h-7 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 flex items-center justify-center text-xs font-bold border border-purple-200 dark:border-purple-800">
+                                {job.secondaryRecruiter.charAt(0).toUpperCase()}
+                              </div>
+                              <span className="font-medium text-zinc-700 dark:text-zinc-300">{job.secondaryRecruiter}</span>
+                            </div>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-1 rounded bg-zinc-50 dark:bg-zinc-800/50 text-zinc-400 text-xs border border-dashed border-zinc-200 dark:border-zinc-700">
+                              Unassigned
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Date Added */}
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-zinc-500 dark:text-zinc-400">
+                          <div className="flex items-center gap-1.5">
+                            <CalendarIcon className="w-4 h-4" />
+                            {job.createdAt || job.dateAdded 
+                              ? new Date(job.createdAt || job.dateAdded).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) 
+                              : 'N/A'
+                            }
+                          </div>
+                        </td>
+
+                        {/* Status */}
+                        <td className="px-6 py-4 text-center">
+                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${
+                            job.active !== false 
+                              ? "bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800/50" 
+                              : "bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800/50"
+                          }`}>
+                            {job.active !== false ? "Active" : "Inactive"}
+                          </span>
+                        </td>
+
+                        {/* Actions */}
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button onClick={() => setSelectedJob(job)} title="View Details" className="p-1.5 rounded-lg text-zinc-400 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-zinc-800 dark:hover:text-blue-400 transition-colors">
+                              <EyeIcon className="w-5 h-5" />
+                            </button>
+                            <button onClick={() => handleEditJob(job)} title="Edit Requirement" className="p-1.5 rounded-lg text-zinc-400 hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-zinc-800 dark:hover:text-amber-400 transition-colors">
+                              <PencilIcon className="w-5 h-5" />
+                            </button>
+                            <button onClick={() => handleToggleActive(job)} title={job.active !== false ? "Mark as Inactive" : "Mark as Active"} className={`p-1.5 rounded-lg transition-colors ${job.active !== false ? 'text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-zinc-800 dark:hover:text-red-400' : 'text-zinc-400 hover:bg-green-50 hover:text-green-600 dark:hover:bg-zinc-800 dark:hover:text-green-400'}`}>
+                              {job.active !== false ? <NoSymbolIcon className="w-5 h-5" /> : <CheckCircleIcon className="w-5 h-5" />}
+                            </button>
+                          </div>
+                        </td>
+
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
 
       {selectedJob && <JobDetailCard job={selectedJob} onClose={() => setSelectedJob(null)} />}
     </div>

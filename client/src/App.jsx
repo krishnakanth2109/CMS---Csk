@@ -21,6 +21,9 @@ import AdminMessages from '@/pages/AdminMessages';
 import AdminReports from '@/pages/AdminReports';
 import AdminSettings from '@/pages/AdminSettings';
 
+// ✅ NEW: Manager Messages page
+import ManagerMessages from '@/pages/ManagerMessages';
+
 // Recruiter Pages
 import RecruiterDashboard from '@/pages/RecruiterDashboard';
 import RecruiterCandidates from '@/pages/RecruiterCandidates';
@@ -39,7 +42,6 @@ function ProtectedRoute({ children, allowedRoles }) {
   if (!isAuthenticated) return <Navigate to="/login" replace />;
 
   if (allowedRoles && !allowedRoles.includes(userRole)) {
-    // Redirect unauthorized users to their home base
     const destination = (userRole === 'admin' || userRole === 'manager') ? '/admin' : '/recruiter';
     return <Navigate to={destination} replace />;
   }
@@ -75,22 +77,22 @@ function AppRoutes() {
       }>
         <Route index element={<AdminDashboard />} />
         <Route path="add-candidate" element={<AddCandidate />} />
-        
-        {/* ✅ FIX: Added the "My Candidates" route specifically for the Admin/Manager using the Recruiter component */}
         <Route path="my-candidates" element={<RecruiterCandidates />} />
-        
         <Route path="recruiters" element={<AdminRecruiters />} />
         <Route path="clients" element={<AdminClientInfo />} />
         <Route path="invoices" element={<AdminClientInvoice />} />
         <Route path="requirements" element={<AdminRequirements />} />
         <Route path="schedules" element={<AdminSchedules />} />
+
+        {/* ✅ Admin sees AdminMessages, Manager sees ManagerMessages */}
         <Route path="messages" element={<AdminMessages />} />
+        <Route path="manager-messages" element={<ManagerMessages />} />
+
         <Route path="reports" element={<AdminReports />} />
         <Route path="settings" element={<AdminSettings />} />
       </Route>
 
       {/* ===================== RECRUITER ROUTES ===================== */}
-      {/* ✅ FIX: Added 'admin' here so they aren't completely blocked from these components if needed */}
       <Route path="/recruiter" element={
         <ProtectedRoute allowedRoles={['recruiter', 'manager', 'admin']}>
           <DashboardLayout />
