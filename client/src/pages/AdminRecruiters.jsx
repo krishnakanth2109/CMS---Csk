@@ -69,6 +69,8 @@ export default function AdminRecruiters() {
   const [candidateFilterType,     setCandidateFilterType]     = useState(null);
   const [selectedRecruiter,       setSelectedRecruiter]       = useState(null);
   const [recruiterToDelete,       setRecruiterToDelete]       = useState(null);
+  const [recruiterToToggle,       setRecruiterToToggle]       = useState(null);
+  const [showDeactivateModal,     setShowDeactivateModal]     = useState(false);
 
   const fileInputRef     = useRef(null);
   const editFileInputRef = useRef(null);
@@ -79,6 +81,13 @@ export default function AdminRecruiters() {
 
   // ── Errors ────────────────────────────────────────────────────────────────
   const [errors, setErrors] = useState({});
+
+  // ── Success Banner ────────────────────────────────────────────────────────
+  const [successBanner, setSuccessBanner] = useState({ show: false, message: '' });
+  const showSuccess = (message) => {
+    setSuccessBanner({ show: true, message });
+    setTimeout(() => setSuccessBanner({ show: false, message: '' }), 4000);
+  };
 
   // ── Form State ────────────────────────────────────────────────────────────
   const EMPTY_RECRUITER = {
@@ -137,18 +146,49 @@ export default function AdminRecruiters() {
   // ── Validation ────────────────────────────────────────────────────────────
   const validateForm = (data, isEdit = false) => {
     const e = {};
-    if (!data.firstName.trim()) e.firstName = "First name is required";
-    if (!data.lastName.trim())  e.lastName  = "Last name is required";
-    if (!data.email.trim())     e.email     = "Email is required";
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) e.email = "Invalid email";
-    if (data.phone && !/^\d{10}$/.test(data.phone)) e.phone = "Phone must be 10 digits";
-    if (!isEdit && !data.password) e.password = "Password is required";
-    if (data.password && data.password.length < 6) e.password = "Min 6 characters";
+    const nameRegex = /^[A-Za-z\s\-'.]+$/;
+
+    // First Name
+    if (!data.firstName.trim())
+      e.firstName = "First name is required";
+    else if (!nameRegex.test(data.firstName.trim()))
+      e.firstName = "First name must contain letters only";
+    else if (data.firstName.trim().length < 2)
+      e.firstName = "First name must be at least 2 characters";
+
+    // Last Name
+    if (!data.lastName.trim())
+      e.lastName = "Last name is required";
+    else if (!nameRegex.test(data.lastName.trim()))
+      e.lastName = "Last name must contain letters only";
+    else if (data.lastName.trim().length < 2)
+      e.lastName = "Last name must be at least 2 characters";
+
+    // Email
+    if (!data.email.trim())
+      e.email = "Email is required";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email))
+      e.email = "Enter a valid email address";
+
+    // Phone (optional but must be 10 digits if filled)
+    if (data.phone && !/^[6-9]\d{9}$/.test(data.phone))
+      e.phone = "Enter a valid 10-digit mobile number";
+
+    // Password
+    if (!isEdit && !data.password)
+      e.password = "Password is required";
+    else if (data.password && data.password.length < 6)
+      e.password = "Password must be at least 6 characters";
+
     setErrors(e);
     return !Object.keys(e).length;
   };
 
   const handleInputChange = (field, value, isEdit) => {
+    // Block digits + special chars in name fields — letters, spaces, hyphens, apostrophes only
+    if ((field === 'firstName' || field === 'lastName') && value && /[^A-Za-z\s\-'.]/.test(value)) return;
+
+    // Phone: digits only, max 10
     if (field === 'phone' && value && !/^\d*$/.test(value)) return;
     if (field === 'phone' && value.length > 10) return;
 
@@ -171,11 +211,13 @@ export default function AdminRecruiters() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Failed to create user');
 
-      toast({ title: "Success", description: "User added successfully!" });
+      const addedName = `${newRecruiter.firstName} ${newRecruiter.lastName}`;
+      const addedRole = newRecruiter.role;
       setShowModal(false);
       setNewRecruiter(EMPTY_RECRUITER);
       setErrors({});
       fetchData();
+      showSuccess(`✅ ${addedName} has been added successfully as ${addedRole}.`);
     } catch (error) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     }
@@ -196,10 +238,11 @@ export default function AdminRecruiters() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Failed to update user');
 
-      toast({ title: "Success", description: "User updated!" });
+      const editedName = `${editRecruiter.firstName} ${editRecruiter.lastName}`;
       setShowEditModal(false);
       setErrors({});
       fetchData();
+      showSuccess(`✅ ${editedName}'s profile has been updated successfully.`);
     } catch (error) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     }
@@ -214,25 +257,32 @@ export default function AdminRecruiters() {
       });
       if (!res.ok) throw new Error('Failed to delete user');
 
-      toast({ title: "Deleted", description: "User removed." });
+      const deletedName = `${recruiterToDelete.firstName} ${recruiterToDelete.lastName}`;
       setShowDeleteModal(false);
       setRecruiterToDelete(null);
       fetchData();
+      showSuccess(`🗑️ ${deletedName} has been permanently deleted.`);
     } catch (error) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     }
   };
 
-  const handleToggleStatus = async (recruiter) => {
+  const handleToggleStatus = async () => {
+    if (!recruiterToToggle) return;
+    const wasActive = isActive(recruiterToToggle);
     try {
       const headers = await getAuthHeader();
-      const res = await fetch(`${API_URL}/recruiters/${recruiter.id}/status`, {
+      const res = await fetch(`${API_URL}/recruiters/${recruiterToToggle.id}/status`, {
         method: 'PATCH', headers,
       });
       if (!res.ok) throw new Error('Failed to update status');
-      const data = await res.json();
-      toast({ title: "Status Updated", description: data.message });
+      const toggledName = `${recruiterToToggle.firstName} ${recruiterToToggle.lastName}`;
+      setShowDeactivateModal(false);
+      setRecruiterToToggle(null);
       fetchData();
+      showSuccess(wasActive
+        ? `🔴 ${toggledName} has been deactivated.`
+        : `🟢 ${toggledName} has been activated.`);
     } catch (error) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     }
@@ -395,6 +445,44 @@ export default function AdminRecruiters() {
     <div className="flex-1 p-6 lg:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
 
+        {/* ── Success Banner ───────────────────────────────────────────── */}
+        {successBanner.show && (
+          <div style={{
+            position: 'fixed', top: '24px', right: '24px', zIndex: 9999,
+            background: 'linear-gradient(135deg, #166534, #15803d)',
+            color: 'white', borderRadius: '12px',
+            padding: '16px 20px', minWidth: '320px', maxWidth: '420px',
+            boxShadow: '0 10px 40px rgba(0,0,0,0.25)',
+            display: 'flex', alignItems: 'center', gap: '12px',
+            animation: 'slideInRight 0.3s ease',
+          }}>
+            <style>{`
+              @keyframes slideInRight {
+                from { transform: translateX(120%); opacity: 0; }
+                to   { transform: translateX(0);    opacity: 1; }
+              }
+            `}</style>
+            <div style={{
+              background: 'rgba(255,255,255,0.2)', borderRadius: '50%',
+              width: '36px', height: '36px', display: 'flex',
+              alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 700, fontSize: '14px', marginBottom: '2px' }}>Success</div>
+              <div style={{ fontSize: '13px', opacity: 0.9 }}>{successBanner.message}</div>
+            </div>
+            <button onClick={() => setSuccessBanner({ show: false, message: '' })}
+              style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer',
+                opacity: 0.7, fontSize: '18px', lineHeight: 1, padding: '0 4px' }}>
+              ✕
+            </button>
+          </div>
+        )}
+
         {/* ── Header ──────────────────────────────────────────────────── */}
         <div className="flex flex-col lg:flex-row justify-between items-center gap-4">
           <div>
@@ -528,7 +616,8 @@ export default function AdminRecruiters() {
                               <Users className="h-4 w-4 mr-2" /> View Candidates
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => handleToggleStatus(r)}
+                            <DropdownMenuItem
+                              onClick={() => { setRecruiterToToggle(r); setShowDeactivateModal(true); }}
                               className={isActive(r) ? 'text-orange-600' : 'text-green-600'}>
                               {isActive(r)
                                 ? <><UserX className="h-4 w-4 mr-2" />Deactivate</>
@@ -666,7 +755,8 @@ export default function AdminRecruiters() {
                                     <TrendingUp className="h-4 w-4 mr-2" /> Performance
                                   </DropdownMenuItem>
                                   <DropdownMenuSeparator />
-                                  <DropdownMenuItem onClick={() => handleToggleStatus(r)}
+                                  <DropdownMenuItem
+                                    onClick={() => { setRecruiterToToggle(r); setShowDeactivateModal(true); }}
                                     className={isActive(r) ? 'text-orange-600' : 'text-green-600'}>
                                     {isActive(r)
                                       ? <><UserX className="h-4 w-4 mr-2" />Deactivate</>
@@ -741,6 +831,7 @@ export default function AdminRecruiters() {
                     <label className="text-sm font-medium">First Name <span className="text-red-500">*</span></label>
                     <Input value={newRecruiter.firstName}
                       onChange={(e) => handleInputChange('firstName', e.target.value, false)}
+                      placeholder="Letters only"
                       className={errors.firstName ? "border-red-500" : ""} />
                     {errors.firstName && <p className="text-xs text-red-500 mt-1">{errors.firstName}</p>}
                   </div>
@@ -748,6 +839,7 @@ export default function AdminRecruiters() {
                     <label className="text-sm font-medium">Last Name <span className="text-red-500">*</span></label>
                     <Input value={newRecruiter.lastName}
                       onChange={(e) => handleInputChange('lastName', e.target.value, false)}
+                      placeholder="Letters only"
                       className={errors.lastName ? "border-red-500" : ""} />
                     {errors.lastName && <p className="text-xs text-red-500 mt-1">{errors.lastName}</p>}
                   </div>
@@ -847,6 +939,7 @@ export default function AdminRecruiters() {
                     <label className="text-sm font-medium">First Name <span className="text-red-500">*</span></label>
                     <Input value={editRecruiter.firstName}
                       onChange={(e) => handleInputChange('firstName', e.target.value, true)}
+                      placeholder="Letters only"
                       className={errors.firstName ? "border-red-500" : ""} />
                     {errors.firstName && <p className="text-xs text-red-500 mt-1">{errors.firstName}</p>}
                   </div>
@@ -854,6 +947,7 @@ export default function AdminRecruiters() {
                     <label className="text-sm font-medium">Last Name <span className="text-red-500">*</span></label>
                     <Input value={editRecruiter.lastName}
                       onChange={(e) => handleInputChange('lastName', e.target.value, true)}
+                      placeholder="Letters only"
                       className={errors.lastName ? "border-red-500" : ""} />
                     {errors.lastName && <p className="text-xs text-red-500 mt-1">{errors.lastName}</p>}
                   </div>
@@ -914,16 +1008,85 @@ export default function AdminRecruiters() {
         <Dialog open={showDeleteModal} onClose={() => setShowDeleteModal(false)} className="relative z-50">
           <DialogBackdrop className="fixed inset-0 bg-black/50" />
           <div className="fixed inset-0 flex items-center justify-center p-4">
-            <DialogPanel className="bg-white dark:bg-gray-900 rounded-xl p-6 max-w-md shadow-2xl">
-              <DialogTitle className="text-lg font-bold text-red-600 flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5" /> Confirm Deletion
-              </DialogTitle>
-              <p className="mt-2 text-gray-600 dark:text-gray-300">
-                Delete <strong>{recruiterToDelete?.firstName} {recruiterToDelete?.lastName}</strong>? This cannot be undone.
-              </p>
-              <div className="flex justify-end gap-2 mt-4">
-                <Button variant="outline" onClick={() => setShowDeleteModal(false)}>Cancel</Button>
-                <Button variant="destructive" onClick={handleDeleteRecruiter}>Delete</Button>
+            <DialogPanel className="bg-white dark:bg-gray-900 rounded-xl p-6 max-w-sm w-full shadow-2xl">
+              <div className="flex flex-col items-center text-center gap-3">
+                <div className="h-14 w-14 rounded-full bg-red-100 flex items-center justify-center">
+                  <Trash2 className="h-7 w-7 text-red-600" />
+                </div>
+                <DialogTitle className="text-lg font-bold text-gray-900 dark:text-white">
+                  Delete User?
+                </DialogTitle>
+                <p className="text-gray-500 text-sm">
+                  Are you sure you want to delete{" "}
+                  <span className="font-semibold text-gray-800 dark:text-gray-200">
+                    {recruiterToDelete?.firstName} {recruiterToDelete?.lastName}
+                  </span>?
+                  <br />
+                  <span className="text-red-500 text-xs font-medium">This action cannot be undone.</span>
+                </p>
+              </div>
+              <div className="flex gap-3 mt-6">
+                <Button className="flex-1" variant="outline"
+                  onClick={() => { setShowDeleteModal(false); setRecruiterToDelete(null); }}>
+                  No, Cancel
+                </Button>
+                <Button className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                  onClick={handleDeleteRecruiter}>
+                  Yes, Delete
+                </Button>
+              </div>
+            </DialogPanel>
+          </div>
+        </Dialog>
+
+        {/* ── Deactivate / Activate Confirm ──────────────────────────── */}
+        <Dialog open={showDeactivateModal} onClose={() => setShowDeactivateModal(false)} className="relative z-50">
+          <DialogBackdrop className="fixed inset-0 bg-black/50" />
+          <div className="fixed inset-0 flex items-center justify-center p-4">
+            <DialogPanel className="bg-white dark:bg-gray-900 rounded-xl p-6 max-w-sm w-full shadow-2xl">
+              <div className="flex flex-col items-center text-center gap-3">
+                <div className={`h-14 w-14 rounded-full flex items-center justify-center ${
+                  recruiterToToggle && isActive(recruiterToToggle)
+                    ? 'bg-orange-100' : 'bg-green-100'
+                }`}>
+                  {recruiterToToggle && isActive(recruiterToToggle)
+                    ? <UserX className="h-7 w-7 text-orange-600" />
+                    : <UserCheck className="h-7 w-7 text-green-600" />}
+                </div>
+                <DialogTitle className="text-lg font-bold text-gray-900 dark:text-white">
+                  {recruiterToToggle && isActive(recruiterToToggle) ? 'Deactivate User?' : 'Activate User?'}
+                </DialogTitle>
+                <p className="text-gray-500 text-sm">
+                  Are you sure you want to{" "}
+                  <span className={`font-semibold ${
+                    recruiterToToggle && isActive(recruiterToToggle) ? 'text-orange-600' : 'text-green-600'
+                  }`}>
+                    {recruiterToToggle && isActive(recruiterToToggle) ? 'deactivate' : 'activate'}
+                  </span>{" "}
+                  <span className="font-semibold text-gray-800 dark:text-gray-200">
+                    {recruiterToToggle?.firstName} {recruiterToToggle?.lastName}
+                  </span>?
+                  {recruiterToToggle && isActive(recruiterToToggle) && (
+                    <><br /><span className="text-orange-500 text-xs font-medium">
+                      They will not be able to log in while inactive.
+                    </span></>
+                  )}
+                </p>
+              </div>
+              <div className="flex gap-3 mt-6">
+                <Button className="flex-1" variant="outline"
+                  onClick={() => { setShowDeactivateModal(false); setRecruiterToToggle(null); }}>
+                  No, Cancel
+                </Button>
+                <Button
+                  className={`flex-1 text-white ${
+                    recruiterToToggle && isActive(recruiterToToggle)
+                      ? 'bg-orange-500 hover:bg-orange-600'
+                      : 'bg-green-600 hover:bg-green-700'
+                  }`}
+                  onClick={handleToggleStatus}>
+                  {recruiterToToggle && isActive(recruiterToToggle) ? 'Yes, Deactivate' : 'Yes, Activate'}
+                </Button>
               </div>
             </DialogPanel>
           </div>

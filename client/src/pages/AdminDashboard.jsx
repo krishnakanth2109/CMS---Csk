@@ -230,7 +230,7 @@ export default function AdminDashboard() {
           onClick={() => navigate('/admin/add-candidate', { state: { filter: 'All' } })}
         />
         <BubbleStatCard 
-          title="Active Recruiters" 
+          title="Recruiters" 
           value={recruiters.length} 
           trend={5} 
           icon={UserCheck} 

@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { Toaster } from '@/components/ui/toaster';
 
 // Auth Pages
 import Login from '@/pages/Login';
@@ -119,6 +120,7 @@ function App() {
   return (
     <AuthProvider>
       <AppRoutes />
+      <Toaster />
     </AuthProvider>
   );
 }
