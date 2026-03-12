@@ -56,8 +56,8 @@ const JobDetailCard = ({ job, onClose }) => {
                   </h3>
                   <div className="space-y-3 text-sm">
                     <p className="flex justify-between"><span className="text-zinc-500">Skills:</span> <span className="font-medium text-right ml-4">{job.skills || "-"}</span></p>
-                    <p className="flex justify-between"><span className="text-zinc-500">Total Exp:</span> <span className="font-medium">{job.experience || "-"}</span></p>
-                    <p className="flex justify-between"><span className="text-zinc-500">Relevant Exp:</span> <span className="font-medium">{job.relevantExperience || "-"}</span></p>
+                    <p className="flex justify-between"><span className="text-zinc-500">Total Exp:</span> <span className="font-medium">{job.experience ? `${job.experience} Years` : "-"}</span></p>
+                    <p className="flex justify-between"><span className="text-zinc-500">Relevant Exp:</span> <span className="font-medium">{job.relevantExperience ? `${job.relevantExperience} Years` : "-"}</span></p>
                     <p className="flex justify-between"><span className="text-zinc-500">Qualification:</span> <span className="font-medium">{job.qualification || "-"}</span></p>
                     <p className="flex justify-between"><span className="text-zinc-500">Gender:</span> <span className="font-medium">{job.gender || "Any"}</span></p>
                   </div>
@@ -192,15 +192,22 @@ export default function AdminRequirements() {
 
       if(jobsRes.ok) {
         const data = await jobsRes.json();
-        setJobs(data.map((j) => ({ ...j, id: j._id })));
+        const jobsArray = Array.isArray(data) ? data : data.data || [];
+        setJobs(jobsArray.map((j) => ({ ...j, id: j._id })));
       }
       if(clientsRes.ok) {
         const data = await clientsRes.json();
-        setClients(data.map((c) => ({ id: c._id, companyName: c.companyName })));
+        const clientsArray = Array.isArray(data) ? data : data.data || [];
+        setClients(clientsArray.map((c) => ({ id: c._id, companyName: c.companyName })));
       }
       if(recRes.ok) {
         const data = await recRes.json();
-        setRecruiters(data.map((r) => ({ id: r._id, name: r.name, email: r.email })));
+        const recruitersArray = Array.isArray(data) ? data : data.data || data.recruiters || [];
+        setRecruiters(recruitersArray.map((r) => ({ 
+          id: r._id || r.id, 
+          name: r.name || r.username || r.fullName || r.firstName || r.email || `Unnamed Recruiter`, 
+          email: r.email 
+        })));
       }
     } catch (error) {
       toast({ title: "Error loading data", variant: "destructive" });
@@ -211,56 +218,117 @@ export default function AdminRequirements() {
 
   useEffect(() => { fetchData(); }, []);
 
+  // ✅ REAL-TIME INPUT RESTRICTION
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    let newValue = type === 'checkbox' ? checked : value;
+
+    // Strict input filtering based on field type
+    if (type !== 'checkbox') {
+      if (name === 'position' || name === 'qualification') {
+        // Strip everything except letters and spaces
+        newValue = newValue.replace(/[^a-zA-Z\s]/g, '');
+      } else if (name === 'experience' || name === 'relevantExperience') {
+        // Strip everything except numbers
+        newValue = newValue.replace(/\D/g, '');
+      } else if (name === 'jobCode') {
+        // Strip invalid characters for Job Code (only allow alphanumeric, hyphens, underscores)
+        newValue = newValue.replace(/[^a-zA-Z0-9\-_]/g, '');
+      }
+    }
+
+    setForm({ ...form, [name]: newValue });
+
+    // Clear error for the field being typed in
+    if (errors[name]) {
+        setErrors(prev => { const n = { ...prev }; delete n[name]; return n; });
+    }
+  };
+
+  // ✅ SUBMIT VALIDATION (Checks lengths and requirements)
   const validateForm = () => {
     const newErrors = {};
-    if (!form.jobCode?.trim()) newErrors.jobCode = "Job Code is required";
+    const trimStr = (val) => (typeof val === "string" ? val.trim() : val);
+
+    const code = trimStr(form.jobCode);
+    if (!code) newErrors.jobCode = "Job Code is required";
+    else if (code.length < 2) newErrors.jobCode = "Must be at least 2 characters";
+
     if (!form.clientName) newErrors.clientName = "Please select a client";
-    if (!form.position?.trim()) newErrors.position = "Role is required";
-    if (!form.location?.trim()) newErrors.location = "Location is required";
-    if (!form.experience?.trim()) newErrors.experience = "Experience required";
-    if (!form.salaryBudget?.trim()) newErrors.salaryBudget = "Salary Range required";
-    if (!form.skills?.trim()) newErrors.skills = "Skills required";
     
-    if (form.jdLink && !/^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$/.test(form.jdLink)) {
-        newErrors.jdLink = "Invalid URL format";
+    const position = trimStr(form.position);
+    if (!position) newErrors.position = "Role is required";
+    else if (position.length < 2) newErrors.position = "Must be at least 2 characters";
+
+    const loc = trimStr(form.location);
+    if (!loc) newErrors.location = "Location is required";
+
+    const exp = trimStr(form.experience);
+    if (!exp) newErrors.experience = "Experience is required";
+
+    const salary = trimStr(form.salaryBudget);
+    if (!salary) newErrors.salaryBudget = "Salary Range is required";
+
+    // Cross-validation: Primary and Secondary recruiters cannot be the same
+    if (form.primaryRecruiter && form.secondaryRecruiter && form.primaryRecruiter === form.secondaryRecruiter) {
+      newErrors.secondaryRecruiter = "Secondary Recruiter cannot be the same as Primary";
+      newErrors.primaryRecruiter = "Must be different from Secondary";
+    }
+
+    const skills = trimStr(form.skills);
+    if (!skills) newErrors.skills = "At least one skill is required";
+
+    const link = trimStr(form.jdLink);
+    if (link) {
+      const urlPattern = /^(https?:\/\/)?([\w\d\-]+\.)+\w{2,}(\/.*)?$/i;
+      if (!urlPattern.test(link)) {
+        newErrors.jdLink = "Please enter a valid URL (e.g., https://example.com)";
+      }
     }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setForm({ ...form, [name]: type === 'checkbox' ? checked : value });
-    if (errors[name]) {
-        setErrors(prev => { const n = { ...prev }; delete n[name]; return n; });
-    }
-  };
-
   const handleSubmit = async () => {
     if (!validateForm()) {
-      toast({ title: "Validation Error", description: "Required fields missing or invalid", variant: "destructive" });
+      toast({ title: "Validation Error", description: "Please fix the highlighted fields", variant: "destructive" });
       return;
     }
+
+    // Clean payload before sending
+    const sanitizedPayload = {
+      ...form,
+      jobCode: form.jobCode.trim(),
+      position: form.position.trim(),
+      location: form.location.trim(),
+      experience: form.experience.trim(),
+      relevantExperience: form.relevantExperience?.trim() || "",
+      qualification: form.qualification?.trim() || "",
+      salaryBudget: form.salaryBudget.trim(),
+      noticePeriod: form.noticePeriod?.trim() || "",
+      skills: form.skills.trim(),
+      jdLink: form.jdLink?.trim() || ""
+    };
 
     try {
       const url = editingJob ? `${API_URL}/jobs/${editingJob.id}` : `${API_URL}/jobs`;
       const response = await fetch(url, {
         method: editingJob ? 'PUT' : 'POST',
         headers: await getAuthHeader(),
-        body: JSON.stringify(form)
+        body: JSON.stringify(sanitizedPayload)
       });
 
       if (!response.ok) throw new Error('Failed to save job');
 
-      toast({ title: "Success", description: "Job requirement saved" });
+      toast({ title: "Success", description: "Job requirement saved successfully" });
       setShowForm(false);
       setEditingJob(null);
       setErrors({});
       setForm(initialFormState);
       fetchData();
     } catch (error) {
-      toast({ title: "Error", variant: "destructive" });
+      toast({ title: "Error", description: "Failed to save data. Please try again.", variant: "destructive" });
     }
   };
 
@@ -289,9 +357,9 @@ export default function AdminRequirements() {
   };
 
   const filteredJobs = jobs.filter(j => {
-    const matchesSearch = j.position.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          j.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          j.jobCode.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = j.position?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          j.clientName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          j.jobCode?.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesClient = selectedClientFilter === "" || j.clientName === selectedClientFilter;
     
@@ -299,7 +367,6 @@ export default function AdminRequirements() {
   });
 
   return (
-    // Fixed container to prevent unwanted global horizontal scroll
     <div className="flex-1 grid grid-cols-1 min-w-0 w-full p-6 space-y-8 overflow-y-auto overflow-x-hidden bg-slate-50 dark:bg-zinc-950 min-h-screen text-zinc-900 dark:text-zinc-100">
       
       {/* Header */}
@@ -338,57 +405,59 @@ export default function AdminRequirements() {
                 {/* 1. Job Code */}
                 <div className="md:col-span-1">
                   <label className="block text-xs font-medium text-zinc-500 mb-1">1. Job Code *</label>
-                  <input name="jobCode" placeholder="E.g. JB1001" value={form.jobCode} onChange={handleChange} className={`${inputCls} ${errors.jobCode ? "border-red-500" : ""}`} />
+                  <input name="jobCode" placeholder="E.g. JB1001" value={form.jobCode} onChange={handleChange} className={`${inputCls} ${errors.jobCode ? "border-red-500 focus:ring-red-500" : ""}`} />
                   {errors.jobCode && <p className="text-xs text-red-500 mt-1">{errors.jobCode}</p>}
                 </div>
 
                 {/* 2. Client */}
                 <div className="md:col-span-1">
                   <label className="block text-xs font-medium text-zinc-500 mb-1">2. Client *</label>
-                  <select name="clientName" value={form.clientName} onChange={handleChange} className={`${inputCls} ${errors.clientName ? "border-red-500" : ""}`}>
+                  <select name="clientName" value={form.clientName} onChange={handleChange} className={`${inputCls} ${errors.clientName ? "border-red-500 focus:ring-red-500" : ""}`}>
                     <option value="">Select Client</option>
                     {clients.map(c => <option key={c.id} value={c.companyName}>{c.companyName}</option>)}
                   </select>
                   {errors.clientName && <p className="text-xs text-red-500 mt-1">{errors.clientName}</p>}
                 </div>
 
-                {/* 3. Role / Position */}
+                {/* 3. Role / Position (Name) */}
                 <div className="md:col-span-1">
                   <label className="block text-xs font-medium text-zinc-500 mb-1">3. Role / Position *</label>
-                  <input name="position" placeholder="Job Title" value={form.position} onChange={handleChange} className={`${inputCls} ${errors.position ? "border-red-500" : ""}`} />
+                  <input name="position" placeholder="E.g. Software Engineer" value={form.position} onChange={handleChange} className={`${inputCls} ${errors.position ? "border-red-500 focus:ring-red-500" : ""}`} />
                   {errors.position && <p className="text-xs text-red-500 mt-1">{errors.position}</p>}
                 </div>
 
                 {/* 4. Location */}
                 <div className="md:col-span-1">
                   <label className="block text-xs font-medium text-zinc-500 mb-1">4. Location *</label>
-                  <input name="location" placeholder="City / Remote" value={form.location} onChange={handleChange} className={`${inputCls} ${errors.location ? "border-red-500" : ""}`} />
+                  <input name="location" placeholder="City / Remote" value={form.location} onChange={handleChange} className={`${inputCls} ${errors.location ? "border-red-500 focus:ring-red-500" : ""}`} />
                   {errors.location && <p className="text-xs text-red-500 mt-1">{errors.location}</p>}
                 </div>
 
                 {/* 5. Experience */}
                 <div className="md:col-span-1">
-                  <label className="block text-xs font-medium text-zinc-500 mb-1">5. Experience *</label>
-                  <input name="experience" placeholder="E.g. 3-5 Years" value={form.experience} onChange={handleChange} className={`${inputCls} ${errors.experience ? "border-red-500" : ""}`} />
+                  <label className="block text-xs font-medium text-zinc-500 mb-1">5. Experience (Years) *</label>
+                  <input name="experience" placeholder="E.g. 5" value={form.experience} onChange={handleChange} className={`${inputCls} ${errors.experience ? "border-red-500 focus:ring-red-500" : ""}`} />
                   {errors.experience && <p className="text-xs text-red-500 mt-1">{errors.experience}</p>}
                 </div>
 
                 {/* 6. Relevant Experience */}
                 <div className="md:col-span-1">
-                  <label className="block text-xs font-medium text-zinc-500 mb-1">6. Relevant Experience</label>
-                  <input name="relevantExperience" placeholder="E.g. 2 Years" value={form.relevantExperience} onChange={handleChange} className={inputCls} />
+                  <label className="block text-xs font-medium text-zinc-500 mb-1">6. Relevant Experience (Years)</label>
+                  <input name="relevantExperience" placeholder="E.g. 2" value={form.relevantExperience} onChange={handleChange} className={`${inputCls} ${errors.relevantExperience ? "border-red-500 focus:ring-red-500" : ""}`} />
+                  {errors.relevantExperience && <p className="text-xs text-red-500 mt-1">{errors.relevantExperience}</p>}
                 </div>
 
                 {/* 7. Educational Qualification */}
                 <div className="md:col-span-1">
                   <label className="block text-xs font-medium text-zinc-500 mb-1">7. Educational Qualification</label>
-                  <input name="qualification" placeholder="E.g. B.Tech / MBA" value={form.qualification} onChange={handleChange} className={inputCls} />
+                  <input name="qualification" placeholder="E.g. BTech" value={form.qualification} onChange={handleChange} className={`${inputCls} ${errors.qualification ? "border-red-500 focus:ring-red-500" : ""}`} />
+                  {errors.qualification && <p className="text-xs text-red-500 mt-1">{errors.qualification}</p>}
                 </div>
 
                 {/* 8. Maximum Salary Range */}
                 <div className="md:col-span-1">
                   <label className="block text-xs font-medium text-zinc-500 mb-1">8. Maximum Salary Range *</label>
-                  <input name="salaryBudget" placeholder="E.g. 10-12 LPA" value={form.salaryBudget} onChange={handleChange} className={`${inputCls} ${errors.salaryBudget ? "border-red-500" : ""}`} />
+                  <input name="salaryBudget" placeholder="E.g. 10-12 LPA" value={form.salaryBudget} onChange={handleChange} className={`${inputCls} ${errors.salaryBudget ? "border-red-500 focus:ring-red-500" : ""}`} />
                   {errors.salaryBudget && <p className="text-xs text-red-500 mt-1">{errors.salaryBudget}</p>}
                 </div>
 
@@ -405,38 +474,41 @@ export default function AdminRequirements() {
                 {/* 10. N/P (Notice Period) */}
                 <div className="md:col-span-1">
                   <label className="block text-xs font-medium text-zinc-500 mb-1">10. N/P (Notice Period)</label>
-                  <input name="noticePeriod" placeholder="E.g. 15 Days, Immediate" value={form.noticePeriod} onChange={handleChange} className={inputCls} />
+                  <input name="noticePeriod" placeholder="E.g. 15 Days, Immediate" value={form.noticePeriod} onChange={handleChange} className={`${inputCls} ${errors.noticePeriod ? "border-red-500 focus:ring-red-500" : ""}`} />
+                  {errors.noticePeriod && <p className="text-xs text-red-500 mt-1">{errors.noticePeriod}</p>}
                 </div>
 
                 {/* 11. Primary Recruiter */}
                 <div className="md:col-span-1">
                   <label className="block text-xs font-medium text-zinc-500 mb-1">11. Primary Recruiter</label>
-                  <select name="primaryRecruiter" value={form.primaryRecruiter} onChange={handleChange} className={inputCls}>
+                  <select name="primaryRecruiter" value={form.primaryRecruiter} onChange={handleChange} className={`${inputCls} ${errors.primaryRecruiter ? "border-red-500 focus:ring-red-500" : ""}`}>
                     <option value="">Select Recruiter</option>
                     {recruiters.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
                   </select>
+                  {errors.primaryRecruiter && <p className="text-xs text-red-500 mt-1">{errors.primaryRecruiter}</p>}
                 </div>
 
                 {/* 12. Secondary Recruiter */}
                 <div className="md:col-span-1">
                   <label className="block text-xs font-medium text-zinc-500 mb-1">12. Secondary Recruiter</label>
-                  <select name="secondaryRecruiter" value={form.secondaryRecruiter} onChange={handleChange} className={inputCls}>
+                  <select name="secondaryRecruiter" value={form.secondaryRecruiter} onChange={handleChange} className={`${inputCls} ${errors.secondaryRecruiter ? "border-red-500 focus:ring-red-500" : ""}`}>
                     <option value="">Select Recruiter</option>
                     {recruiters.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
                   </select>
+                  {errors.secondaryRecruiter && <p className="text-xs text-red-500 mt-1">{errors.secondaryRecruiter}</p>}
                 </div>
 
                 {/* 13. Skills */}
                 <div className="md:col-span-2">
                   <label className="block text-xs font-medium text-zinc-500 mb-1">13. Skills *</label>
-                  <input name="skills" placeholder="React, Node.js, etc." value={form.skills} onChange={handleChange} className={`${inputCls} ${errors.skills ? "border-red-500" : ""}`} />
+                  <input name="skills" placeholder="React, Node.js, etc." value={form.skills} onChange={handleChange} className={`${inputCls} ${errors.skills ? "border-red-500 focus:ring-red-500" : ""}`} />
                   {errors.skills && <p className="text-xs text-red-500 mt-1">{errors.skills}</p>}
                 </div>
 
                 {/* 14. JD Link (Optional) */}
                 <div className="md:col-span-2">
                   <label className="block text-xs font-medium text-zinc-500 mb-1">14. JD Link (Optional)</label>
-                  <input name="jdLink" placeholder="https://..." value={form.jdLink} onChange={handleChange} className={`${inputCls} ${errors.jdLink ? "border-red-500" : ""}`} />
+                  <input name="jdLink" placeholder="https://..." value={form.jdLink} onChange={handleChange} className={`${inputCls} ${errors.jdLink ? "border-red-500 focus:ring-red-500" : ""}`} />
                   {errors.jdLink && <p className="text-xs text-red-500 mt-1">{errors.jdLink}</p>}
                 </div>
               </div>
@@ -515,7 +587,6 @@ export default function AdminRequirements() {
                 onScroll={handleBottomScroll} 
                 className="no-scrollbar max-h-[calc(100vh-16rem)] min-h-[400px] overflow-auto rounded-b-xl w-full"
               >
-                {/* 🔴 Added min-w-[1400px] to force horizontal scrolling for many columns */}
                 <table ref={tableRef} className="min-w-[1400px] w-full text-left text-sm whitespace-nowrap border-collapse">
                   <thead className="bg-zinc-50 dark:bg-zinc-900/80 text-xs uppercase text-zinc-500 font-semibold tracking-wider sticky top-0 z-10 shadow-[0_1px_0_0_#e4e4e7] dark:shadow-[0_1px_0_0_#27272a]">
                     <tr>

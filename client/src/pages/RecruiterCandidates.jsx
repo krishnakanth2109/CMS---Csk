@@ -44,7 +44,7 @@ const Button = ({ children, onClick, disabled, className = '', variant = 'defaul
 };
 
 const Input = ({ className = '', ...props }) => (
-  <input className={`w-full border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 ${className}`} {...props} />
+  <input className={`w-full border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${className}`} {...props} />
 );
 
 const Label = ({ children, className = '', htmlFor }) => (
@@ -88,7 +88,7 @@ const NativeSelect = ({ value, onChange, children, className = '', disabled }) =
     value={value}
     onChange={e => onChange(e.target.value)}
     disabled={disabled}
-    className={`w-full border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 ${className}`}
+    className={`w-full border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${className}`}
   >
     {children}
   </select>
@@ -299,14 +299,28 @@ export default function RecruiterCandidates() {
     if (status) { setActiveStatFilter(status); setStatusFilter('all'); }
   }, [searchParams]);
 
+  // ✅ REAL-TIME INPUT RESTRICTION
   const handleInputChange = (key, value) => {
     let newValue = value;
+    
+    // Strict typing rules
     if (key === 'contact') {
-      newValue = value.replace(/\D/g, '');
-      if (newValue.length > 10) return;
+      newValue = value.replace(/\D/g, '').slice(0, 10);
+    } else if (key === 'name') {
+      newValue = value.replace(/[^a-zA-Z\s]/g, '');
+    } else if (key === 'totalExperience' || key === 'relevantExperience') {
+      // Allow only digits and a single decimal point
+      newValue = value.replace(/[^0-9.]/g, '');
+      const parts = newValue.split('.');
+      if (parts.length > 2) newValue = parts[0] + '.' + parts.slice(1).join('');
     }
+
     setFormData(prev => ({ ...prev, [key]: newValue }));
-    if (errors[key]) setErrors(prev => { const n = { ...prev }; delete n[key]; return n; });
+    
+    // Clear error for the field being typed in
+    if (errors[key]) {
+      setErrors(prev => { const n = { ...prev }; delete n[key]; return n; });
+    }
   };
 
   const addStatus = (newStatus) => {
@@ -315,25 +329,85 @@ export default function RecruiterCandidates() {
     } else if (!formData.status.includes(newStatus)) {
       setFormData(prev => ({ ...prev, status: [...prev.status, newStatus] }));
     }
+    if (errors.status) setErrors(prev => { const n = { ...prev }; delete n.status; return n; });
   };
 
   const removeStatus = (statusToRemove) => {
     setFormData(prev => ({ ...prev, status: prev.status.filter(s => s !== statusToRemove) }));
   };
 
+  // ✅ STRICT SUBMIT VALIDATION
   const validateForm = () => {
     const newErrors = {};
+    const trimStr = (val) => (typeof val === 'string' ? val.trim() : val);
     const data = formData;
-    if (!data.name.trim()) newErrors.name = "Name is required";
-    if (!data.email.trim()) newErrors.email = "Email is required";
-    if (!data.contact.trim()) newErrors.contact = "Phone is required";
-    else if (data.contact.length !== 10) newErrors.contact = "Phone must be exactly 10 digits";
 
-    if (!data.skills.toString().trim()) newErrors.skills = "Skills are required";
-    if (isCustomSource && !data.source.trim()) newErrors.source = "Please specify source";
-    if (data.servingNoticePeriod === 'true' && !data.lwd.trim()) newErrors.lwd = "LWD is required";
-    if (data.offersInHand === 'true' && !data.offerPackage.trim()) newErrors.offerPackage = "Please specify package amount";
-    if (data.status.length === 0) newErrors.status = "At least one status is required";
+    // 1. Personal Info
+    const name = trimStr(data.name);
+    if (!name) newErrors.name = "Name is required";
+    else if (name.length < 2 || name.length > 100) newErrors.name = "Must be between 2 and 100 characters";
+
+    const email = trimStr(data.email);
+    if (!email) newErrors.email = "Email is required";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = "Invalid email format";
+
+    const contact = trimStr(data.contact);
+    if (!contact) newErrors.contact = "Phone is required";
+    else if (contact.length !== 10) newErrors.contact = "Must be exactly 10 digits";
+
+    if (data.linkedin && !/^(https?:\/\/)?([\w\d\-]+\.)+\w{2,}(\/.*)?$/i.test(trimStr(data.linkedin))) {
+      newErrors.linkedin = "Invalid LinkedIn URL format";
+    }
+
+    if (data.currentLocation && trimStr(data.currentLocation).length > 100) newErrors.currentLocation = "Max 100 characters";
+    if (data.preferredLocation && trimStr(data.preferredLocation).length > 100) newErrors.preferredLocation = "Max 100 characters";
+
+    // 2. Professional Info
+    const pos = trimStr(data.position);
+    if (!pos) newErrors.position = "Position is required";
+    else if (pos.length > 100) newErrors.position = "Max 100 characters allowed";
+
+    if (!data.client) newErrors.client = "Client is required";
+
+    if (data.currentCompany && trimStr(data.currentCompany).length > 100) newErrors.currentCompany = "Max 100 characters";
+    if (data.industry && trimStr(data.industry).length > 100) newErrors.industry = "Max 100 characters";
+
+    const skills = trimStr(data.skills);
+    if (!skills) newErrors.skills = "At least one skill is required";
+    else if (skills.length > 500) newErrors.skills = "Max 500 characters allowed";
+
+    if (data.education && trimStr(data.education).length > 200) newErrors.education = "Max 200 characters";
+
+    // 3. Financials & Experience
+    const totExp = trimStr(data.totalExperience);
+    if (totExp && isNaN(Number(totExp))) newErrors.totalExperience = "Must be a valid number";
+    
+    const relExp = trimStr(data.relevantExperience);
+    if (relExp && isNaN(Number(relExp))) newErrors.relevantExperience = "Must be a valid number";
+
+    if (data.ctc && trimStr(data.ctc).length > 50) newErrors.ctc = "Max 50 characters";
+    if (data.ectc && trimStr(data.ectc).length > 50) newErrors.ectc = "Max 50 characters";
+    if (data.currentTakeHome && trimStr(data.currentTakeHome).length > 50) newErrors.currentTakeHome = "Max 50 characters";
+    if (data.expectedTakeHome && trimStr(data.expectedTakeHome).length > 50) newErrors.expectedTakeHome = "Max 50 characters";
+    if (data.noticePeriod && trimStr(data.noticePeriod).length > 50) newErrors.noticePeriod = "Max 50 characters";
+
+    if (data.servingNoticePeriod === 'true') {
+      if (!data.lwd) newErrors.lwd = "LWD is required if currently serving notice";
+    }
+
+    if (data.reasonForChange && trimStr(data.reasonForChange).length > 500) newErrors.reasonForChange = "Max 500 characters allowed";
+
+    if (data.offersInHand === 'true') {
+      if (!trimStr(data.offerPackage)) newErrors.offerPackage = "Package amount is required";
+      else if (trimStr(data.offerPackage).length > 50) newErrors.offerPackage = "Max 50 characters";
+    }
+
+    // 4. Recruitment Info
+    if (isCustomSource && !trimStr(data.source)) newErrors.source = "Source is required";
+    if (!data.status || data.status.length === 0) newErrors.status = "At least one status is required";
+    if (!data.dateAdded) newErrors.dateAdded = "Date Added is required";
+    if (data.remarks && trimStr(data.remarks).length > 1000) newErrors.remarks = "Max 1000 characters allowed";
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -440,12 +514,13 @@ export default function RecruiterCandidates() {
   };
 
   const handleSave = async (isEdit) => {
-    if (!validateForm()) { toast({ title: "Validation Error", description: "Please fix form errors", variant: "destructive" }); return; }
+    if (!validateForm()) { toast({ title: "Validation Error", description: "Please fix the highlighted errors", variant: "destructive" }); return; }
     setIsSubmitting(true);
     try {
       const authH = await authHeaders();
       const headers = { ...authH, 'Content-Type': 'application/json' };
 
+      // Clean Payload
       const nameParts = (formData.name || '').trim().split(/\s+/);
       const firstName = nameParts[0] || formData.name || '';
       const lastName = nameParts.slice(1).join(' ') || nameParts[0] || '';
@@ -454,7 +529,25 @@ export default function RecruiterCandidates() {
         ...formData,
         firstName,
         lastName,
-        name: formData.name,
+        name: formData.name.trim(),
+        email: formData.email.trim(),
+        contact: formData.contact.trim(),
+        linkedin: formData.linkedin.trim(),
+        currentLocation: formData.currentLocation.trim(),
+        preferredLocation: formData.preferredLocation.trim(),
+        position: formData.position.trim(),
+        industry: formData.industry.trim(),
+        currentCompany: formData.currentCompany.trim(),
+        education: formData.education.trim(),
+        ctc: formData.ctc.trim(),
+        ectc: formData.ectc.trim(),
+        currentTakeHome: formData.currentTakeHome.trim(),
+        expectedTakeHome: formData.expectedTakeHome.trim(),
+        noticePeriod: formData.noticePeriod.trim(),
+        reasonForChange: formData.reasonForChange.trim(),
+        offerPackage: formData.offerPackage.trim(),
+        source: formData.source.trim(),
+        remarks: formData.remarks.trim(),
         assignedJobId: typeof formData.assignedJobId === 'object' ? formData.assignedJobId._id : formData.assignedJobId,
         skills: typeof formData.skills === 'string' ? formData.skills.split(',').map((s) => s.trim()).filter(Boolean) : formData.skills,
         rating: parseInt(formData.rating) || 0,
@@ -551,7 +644,7 @@ export default function RecruiterCandidates() {
 
       <div className="space-y-1">
         <Label className={errors.name ? "text-red-500" : ""}>Full Name *</Label>
-        <Input value={formData.name} onChange={e => handleInputChange('name', e.target.value)} className={errors.name ? "border-red-500" : ""} placeholder="Starts with Uppercase" />
+        <Input value={formData.name} onChange={e => handleInputChange('name', e.target.value)} className={errors.name ? "border-red-500" : ""} placeholder="Letters only" />
         {errors.name && <span className="text-xs text-red-500">{errors.name}</span>}
       </div>
       <div className="space-y-1">
@@ -564,72 +657,129 @@ export default function RecruiterCandidates() {
         <Input value={formData.contact} onChange={e => handleInputChange('contact', e.target.value)} className={errors.contact ? "border-red-500" : ""} placeholder="10 Digits Only" />
         {errors.contact && <span className="text-xs text-red-500">{errors.contact}</span>}
       </div>
-      <div className="space-y-1"><Label>Date of Birth</Label><Input type="date" value={formData.dateOfBirth} onChange={e => handleInputChange('dateOfBirth', e.target.value)} /></div>
       <div className="space-y-1">
-        <Label>Gender</Label>
-        <NativeSelect value={formData.gender} onChange={val => handleInputChange('gender', val)}>
+        <Label className={errors.dateOfBirth ? "text-red-500" : ""}>Date of Birth</Label>
+        <Input type="date" value={formData.dateOfBirth} onChange={e => handleInputChange('dateOfBirth', e.target.value)} className={errors.dateOfBirth ? "border-red-500" : ""} />
+        {errors.dateOfBirth && <span className="text-xs text-red-500">{errors.dateOfBirth}</span>}
+      </div>
+      <div className="space-y-1">
+        <Label className={errors.gender ? "text-red-500" : ""}>Gender</Label>
+        <NativeSelect value={formData.gender} onChange={val => handleInputChange('gender', val)} className={errors.gender ? "border-red-500" : ""}>
           <option value="">Select</option>
           <option value="Male">Male</option>
           <option value="Female">Female</option>
           <option value="Other">Other</option>
           <option value="Not Specified">Not Specified</option>
         </NativeSelect>
+        {errors.gender && <span className="text-xs text-red-500">{errors.gender}</span>}
       </div>
       <div className="space-y-1">
-        <Label>LinkedIn</Label>
-        <div className="relative"><Linkedin className="absolute left-2 top-2.5 h-4 w-4 text-slate-400" /><Input className="pl-8" value={formData.linkedin} onChange={e => handleInputChange('linkedin', e.target.value)} placeholder="Profile URL" /></div>
+        <Label className={errors.linkedin ? "text-red-500" : ""}>LinkedIn URL</Label>
+        <div className="relative">
+          <Linkedin className="absolute left-2 top-2.5 h-4 w-4 text-slate-400" />
+          <Input className={`pl-8 ${errors.linkedin ? "border-red-500" : ""}`} value={formData.linkedin} onChange={e => handleInputChange('linkedin', e.target.value)} placeholder="https://linkedin.com/in/..." />
+        </div>
+        {errors.linkedin && <span className="text-xs text-red-500">{errors.linkedin}</span>}
       </div>
-      <div className="space-y-1"><Label>Current Location</Label><Input value={formData.currentLocation} onChange={e => handleInputChange('currentLocation', e.target.value)} /></div>
-      <div className="space-y-1"><Label>Preferred Location</Label><Input value={formData.preferredLocation} onChange={e => handleInputChange('preferredLocation', e.target.value)} /></div>
+      <div className="space-y-1">
+        <Label className={errors.currentLocation ? "text-red-500" : ""}>Current Location</Label>
+        <Input value={formData.currentLocation} onChange={e => handleInputChange('currentLocation', e.target.value)} className={errors.currentLocation ? "border-red-500" : ""} />
+        {errors.currentLocation && <span className="text-xs text-red-500">{errors.currentLocation}</span>}
+      </div>
+      <div className="space-y-1">
+        <Label className={errors.preferredLocation ? "text-red-500" : ""}>Preferred Location</Label>
+        <Input value={formData.preferredLocation} onChange={e => handleInputChange('preferredLocation', e.target.value)} className={errors.preferredLocation ? "border-red-500" : ""} />
+        {errors.preferredLocation && <span className="text-xs text-red-500">{errors.preferredLocation}</span>}
+      </div>
 
       {/* ── Section 2: Professional ── */}
       <div className="md:col-span-3 font-semibold border-b pb-1 text-slate-500 mt-4 flex items-center gap-2"><Briefcase className="h-4 w-4" /> Professional Information</div>
 
       <div className="space-y-1">
-        <Label>Role (Position)</Label>
-        <Input value={formData.position} onChange={e => handleInputChange('position', e.target.value)} placeholder="e.g. Frontend Developer" />
+        <Label className={errors.position ? "text-red-500" : ""}>Role (Position) *</Label>
+        <Input value={formData.position} onChange={e => handleInputChange('position', e.target.value)} className={errors.position ? "border-red-500" : ""} placeholder="e.g. Frontend Developer" />
+        {errors.position && <span className="text-xs text-red-500">{errors.position}</span>}
       </div>
       <div className="space-y-1">
-        <Label>Client</Label>
-        <NativeSelect value={formData.client} onChange={val => handleInputChange('client', val)}>
+        <Label className={errors.client ? "text-red-500" : ""}>Client *</Label>
+        <NativeSelect value={formData.client} onChange={val => handleInputChange('client', val)} className={errors.client ? "border-red-500" : ""}>
           <option value="">Select Client</option>
           {clients.map(client => <option key={client._id} value={client.companyName}>{client.companyName}</option>)}
         </NativeSelect>
+        {errors.client && <span className="text-xs text-red-500">{errors.client}</span>}
       </div>
-      <div className="space-y-1"><Label>Current Company</Label><Input value={formData.currentCompany} onChange={e => handleInputChange('currentCompany', e.target.value)} /></div>
-      <div className="space-y-1"><Label>Industry</Label><Input value={formData.industry} onChange={e => handleInputChange('industry', e.target.value)} /></div>
+      <div className="space-y-1">
+        <Label className={errors.currentCompany ? "text-red-500" : ""}>Current Company</Label>
+        <Input value={formData.currentCompany} onChange={e => handleInputChange('currentCompany', e.target.value)} className={errors.currentCompany ? "border-red-500" : ""} />
+        {errors.currentCompany && <span className="text-xs text-red-500">{errors.currentCompany}</span>}
+      </div>
+      <div className="space-y-1">
+        <Label className={errors.industry ? "text-red-500" : ""}>Industry</Label>
+        <Input value={formData.industry} onChange={e => handleInputChange('industry', e.target.value)} className={errors.industry ? "border-red-500" : ""} />
+        {errors.industry && <span className="text-xs text-red-500">{errors.industry}</span>}
+      </div>
       <div className="md:col-span-2 space-y-1">
         <Label className={errors.skills ? "text-red-500" : ""}>Skills (comma separated) *</Label>
-        <Input value={formData.skills} onChange={e => handleInputChange('skills', e.target.value)} className={errors.skills ? "border-red-500" : ""} />
+        <Input value={formData.skills} onChange={e => handleInputChange('skills', e.target.value)} className={errors.skills ? "border-red-500" : ""} placeholder="e.g. React, Node.js" />
         {errors.skills && <span className="text-xs text-red-500">{errors.skills}</span>}
       </div>
 
       <div className="md:col-span-3 font-semibold text-slate-500 border-b pb-1 mt-4 flex items-center gap-2"><GraduationCap className="h-4 w-4" /> Education</div>
-      <div className="md:col-span-3 space-y-1"><Label>Qualification</Label><Input value={formData.education} onChange={e => handleInputChange('education', e.target.value)} placeholder="e.g. B.Tech from IIT Delhi" /></div>
+      <div className="md:col-span-3 space-y-1">
+        <Label className={errors.education ? "text-red-500" : ""}>Qualification</Label>
+        <Input value={formData.education} onChange={e => handleInputChange('education', e.target.value)} className={errors.education ? "border-red-500" : ""} placeholder="e.g. B.Tech from IIT Delhi" />
+        {errors.education && <span className="text-xs text-red-500">{errors.education}</span>}
+      </div>
 
       {/* ── Section 3: Financial & Availability ── */}
       <div className="md:col-span-3 font-semibold text-slate-500 border-b pb-1 mt-4 flex items-center gap-2"><IndianRupee className="h-4 w-4" /> Experience & Availability</div>
 
-      <div className="space-y-1"><Label>Total Exp (Yrs)</Label><Input value={formData.totalExperience} onChange={e => handleInputChange('totalExperience', e.target.value)} placeholder="Numbers only" /></div>
-      <div className="space-y-1"><Label>Relevant Exp (Yrs)</Label><Input value={formData.relevantExperience} onChange={e => handleInputChange('relevantExperience', e.target.value)} placeholder="Numbers only" /></div>
-
-      <div className="space-y-1"><Label>Current CTC (LPA)</Label><Input value={formData.ctc} onChange={e => handleInputChange('ctc', e.target.value)} /></div>
-      <div className="space-y-1"><Label>Expected CTC (LPA)</Label><Input value={formData.ectc} onChange={e => handleInputChange('ectc', e.target.value)} /></div>
-
-      <div className="space-y-1"><Label>Current Take Home (Monthly)</Label><Input value={formData.currentTakeHome} onChange={e => handleInputChange('currentTakeHome', e.target.value)} /></div>
-      <div className="space-y-1"><Label>Expected Take Home (Monthly)</Label><Input value={formData.expectedTakeHome} onChange={e => handleInputChange('expectedTakeHome', e.target.value)} /></div>
-
       <div className="space-y-1">
-        <Label>Notice Period (Days/Months)</Label>
-        <Input value={formData.noticePeriod} onChange={e => handleInputChange('noticePeriod', e.target.value)} placeholder="e.g. 30 Days" />
+        <Label className={errors.totalExperience ? "text-red-500" : ""}>Total Exp (Yrs)</Label>
+        <Input value={formData.totalExperience} onChange={e => handleInputChange('totalExperience', e.target.value)} className={errors.totalExperience ? "border-red-500" : ""} placeholder="Numbers only (e.g. 3.5)" />
+        {errors.totalExperience && <span className="text-xs text-red-500">{errors.totalExperience}</span>}
+      </div>
+      <div className="space-y-1">
+        <Label className={errors.relevantExperience ? "text-red-500" : ""}>Relevant Exp (Yrs)</Label>
+        <Input value={formData.relevantExperience} onChange={e => handleInputChange('relevantExperience', e.target.value)} className={errors.relevantExperience ? "border-red-500" : ""} placeholder="Numbers only (e.g. 2)" />
+        {errors.relevantExperience && <span className="text-xs text-red-500">{errors.relevantExperience}</span>}
       </div>
 
       <div className="space-y-1">
-        <Label>Serving Notice?</Label>
-        <NativeSelect value={formData.servingNoticePeriod} onChange={val => handleInputChange('servingNoticePeriod', val)}>
+        <Label className={errors.ctc ? "text-red-500" : ""}>Current CTC (LPA)</Label>
+        <Input value={formData.ctc} onChange={e => handleInputChange('ctc', e.target.value)} className={errors.ctc ? "border-red-500" : ""} />
+        {errors.ctc && <span className="text-xs text-red-500">{errors.ctc}</span>}
+      </div>
+      <div className="space-y-1">
+        <Label className={errors.ectc ? "text-red-500" : ""}>Expected CTC (LPA)</Label>
+        <Input value={formData.ectc} onChange={e => handleInputChange('ectc', e.target.value)} className={errors.ectc ? "border-red-500" : ""} />
+        {errors.ectc && <span className="text-xs text-red-500">{errors.ectc}</span>}
+      </div>
+
+      <div className="space-y-1">
+        <Label className={errors.currentTakeHome ? "text-red-500" : ""}>Current Take Home</Label>
+        <Input value={formData.currentTakeHome} onChange={e => handleInputChange('currentTakeHome', e.target.value)} className={errors.currentTakeHome ? "border-red-500" : ""} />
+        {errors.currentTakeHome && <span className="text-xs text-red-500">{errors.currentTakeHome}</span>}
+      </div>
+      <div className="space-y-1">
+        <Label className={errors.expectedTakeHome ? "text-red-500" : ""}>Expected Take Home</Label>
+        <Input value={formData.expectedTakeHome} onChange={e => handleInputChange('expectedTakeHome', e.target.value)} className={errors.expectedTakeHome ? "border-red-500" : ""} />
+        {errors.expectedTakeHome && <span className="text-xs text-red-500">{errors.expectedTakeHome}</span>}
+      </div>
+
+      <div className="space-y-1">
+        <Label className={errors.noticePeriod ? "text-red-500" : ""}>Notice Period</Label>
+        <Input value={formData.noticePeriod} onChange={e => handleInputChange('noticePeriod', e.target.value)} className={errors.noticePeriod ? "border-red-500" : ""} placeholder="e.g. 30 Days" />
+        {errors.noticePeriod && <span className="text-xs text-red-500">{errors.noticePeriod}</span>}
+      </div>
+
+      <div className="space-y-1">
+        <Label className={errors.servingNoticePeriod ? "text-red-500" : ""}>Serving Notice?</Label>
+        <NativeSelect value={formData.servingNoticePeriod} onChange={val => handleInputChange('servingNoticePeriod', val)} className={errors.servingNoticePeriod ? "border-red-500" : ""}>
           <option value="false">No</option>
           <option value="true">Yes</option>
         </NativeSelect>
+        {errors.servingNoticePeriod && <span className="text-xs text-red-500">{errors.servingNoticePeriod}</span>}
       </div>
 
       {formData.servingNoticePeriod === 'true' && (
@@ -640,19 +790,25 @@ export default function RecruiterCandidates() {
         </div>
       )}
 
-      <div className="space-y-1"><Label>Reason For Change</Label><textarea value={formData.reasonForChange} onChange={e => handleInputChange('reasonForChange', e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm h-10" /></div>
+      <div className="space-y-1 md:col-span-2">
+        <Label className={errors.reasonForChange ? "text-red-500" : ""}>Reason For Change</Label>
+        <textarea value={formData.reasonForChange} onChange={e => handleInputChange('reasonForChange', e.target.value)} className={`w-full border rounded-lg px-3 py-2 text-sm h-10 ${errors.reasonForChange ? "border-red-500" : "border-slate-300"}`} />
+        {errors.reasonForChange && <span className="text-xs text-red-500">{errors.reasonForChange}</span>}
+      </div>
 
       <div className="space-y-1">
-        <Label>Offers in Hand?</Label>
-        <NativeSelect value={formData.offersInHand} onChange={val => handleInputChange('offersInHand', val)}>
+        <Label className={errors.offersInHand ? "text-red-500" : ""}>Offers in Hand?</Label>
+        <NativeSelect value={formData.offersInHand} onChange={val => handleInputChange('offersInHand', val)} className={errors.offersInHand ? "border-red-500" : ""}>
           <option value="false">No</option>
           <option value="true">Yes</option>
         </NativeSelect>
+        {errors.offersInHand && <span className="text-xs text-red-500">{errors.offersInHand}</span>}
       </div>
+      
       {formData.offersInHand === 'true' && (
         <div className="space-y-1">
           <Label className={errors.offerPackage ? "text-red-500" : ""}>Package Amount *</Label>
-          <Input value={formData.offerPackage} onChange={e => handleInputChange('offerPackage', e.target.value)} placeholder="e.g. 15 LPA" />
+          <Input value={formData.offerPackage} onChange={e => handleInputChange('offerPackage', e.target.value)} className={errors.offerPackage ? "border-red-500" : ""} placeholder="e.g. 15 LPA" />
           {errors.offerPackage && <span className="text-xs text-red-500">{errors.offerPackage}</span>}
         </div>
       )}
@@ -661,16 +817,17 @@ export default function RecruiterCandidates() {
       <div className="md:col-span-3 font-semibold text-slate-500 border-b pb-1 mt-4 flex items-center gap-2"><Target className="h-4 w-4" /> Recruitment Details</div>
 
       <div className="space-y-1">
-        <Label>Source</Label>
-        <NativeSelect value={isCustomSource ? 'Other' : formData.source} onChange={v => { if (v === 'Other') { setIsCustomSource(true); handleInputChange('source', '') } else { setIsCustomSource(false); handleInputChange('source', v) } }}>
+        <Label className={errors.source ? "text-red-500" : ""}>Source *</Label>
+        <NativeSelect value={isCustomSource ? 'Other' : formData.source} onChange={v => { if (v === 'Other') { setIsCustomSource(true); handleInputChange('source', '') } else { setIsCustomSource(false); handleInputChange('source', v) } }} className={errors.source ? "border-red-500" : ""}>
           {standardSources.map(s => <option key={s} value={s}>{s}</option>)}
           <option value="Other">Other</option>
         </NativeSelect>
-        {isCustomSource && <Input className="mt-1" value={formData.source} onChange={e => handleInputChange('source', e.target.value)} placeholder="Enter Source" />}
+        {isCustomSource && <Input className={`mt-1 ${errors.source ? "border-red-500" : ""}`} value={formData.source} onChange={e => handleInputChange('source', e.target.value)} placeholder="Enter Source" />}
+        {errors.source && <span className="text-xs text-red-500">{errors.source}</span>}
       </div>
 
       <div className="space-y-1">
-        <Label className={errors.status ? "text-red-500" : ""}>Status (Multi-select)</Label>
+        <Label className={errors.status ? "text-red-500" : ""}>Status (Multi-select) *</Label>
         <div className={`border rounded-lg p-2 min-h-[42px] flex flex-wrap gap-2 bg-white ${errors.status ? 'border-red-500' : 'border-slate-300'}`}>
           {formData.status.length > 0 ? formData.status.map(status => (
             <Badge key={status} variant="secondary" className="flex items-center gap-1">
@@ -688,15 +845,21 @@ export default function RecruiterCandidates() {
       </div>
 
       <div className="space-y-1">
-        <Label>Rating</Label>
-        <NativeSelect value={formData.rating} onChange={v => handleInputChange('rating', v)}>
+        <Label className={errors.rating ? "text-red-500" : ""}>Rating</Label>
+        <NativeSelect value={formData.rating} onChange={v => handleInputChange('rating', v)} className={errors.rating ? "border-red-500" : ""}>
           {[1, 2, 3, 4, 5].map(r => <option key={r} value={r.toString()}>{r} Stars</option>)}
         </NativeSelect>
+        {errors.rating && <span className="text-xs text-red-500">{errors.rating}</span>}
       </div>
-      <div className="space-y-1"><Label>Date Added</Label><Input type="date" value={formData.dateAdded} onChange={e => handleInputChange('dateAdded', e.target.value)} /></div>
+      <div className="space-y-1">
+        <Label className={errors.dateAdded ? "text-red-500" : ""}>Date Added *</Label>
+        <Input type="date" value={formData.dateAdded} onChange={e => handleInputChange('dateAdded', e.target.value)} className={errors.dateAdded ? "border-red-500" : ""} />
+        {errors.dateAdded && <span className="text-xs text-red-500">{errors.dateAdded}</span>}
+      </div>
       <div className="md:col-span-3 space-y-1 mt-2">
-        <Label>Remarks</Label>
-        <textarea value={formData.remarks} onChange={e => handleInputChange('remarks', e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm min-h-[80px]" />
+        <Label className={errors.remarks ? "text-red-500" : ""}>Remarks</Label>
+        <textarea value={formData.remarks} onChange={e => handleInputChange('remarks', e.target.value)} className={`w-full border rounded-lg px-3 py-2 text-sm min-h-[80px] ${errors.remarks ? "border-red-500" : "border-slate-300"}`} />
+        {errors.remarks && <span className="text-xs text-red-500">{errors.remarks}</span>}
       </div>
     </div>
   );
