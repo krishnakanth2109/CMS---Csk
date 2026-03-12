@@ -241,6 +241,13 @@ router.put('/:id', upload.single('resume'), async (req, res) => {
     delete updateData.createdAt;
     delete updateData.updatedAt;
 
+    // ✅ FIX: findByIdAndUpdate bypasses Mongoose pre-save hooks so the `name`
+    // field is never auto-recomputed. Rebuild it explicitly here so the table
+    // always shows the correct full name after an edit.
+    if (updateData.firstName || updateData.lastName) {
+      updateData.name = `${updateData.firstName || ''} ${updateData.lastName || ''}`.trim();
+    }
+
     const existingCandidate = await Candidate.findById(req.params.id);
     if (!existingCandidate) return res.status(404).json({ message: 'Candidate not found' });
 

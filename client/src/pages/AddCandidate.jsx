@@ -364,20 +364,49 @@ export default function AdminCandidates() {
       const url = isEditMode ? `${API_URL}/candidates/${selectedCandidateId}` : `${API_URL}/candidates`;
       const method = isEditMode ? 'PUT' : 'POST';
 
+      // ✅ FIX 1: Compute `name` on the frontend before sending.
+      // The backend uses findByIdAndUpdate which bypasses Mongoose pre-save hooks,
+      // so the `name` field (firstName + lastName) is NEVER auto-recomputed on edits.
+      // This is why the table kept showing the old name after an update.
+      const computedName = `${formData.firstName || ''} ${formData.lastName || ''}`.trim();
+
       const payload = {
         ...formData,
+        name: computedName,
         offersInHand: formData.offersInHand === 'true',
         servingNoticePeriod: formData.servingNoticePeriod === 'true',
       };
 
-      const res = await fetch(url, {
-        method, headers: getAuthHeader(), body: JSON.stringify(payload),
+      // ✅ FIX 2: Use FormData so Multer on the backend can parse req.body.
+      // Sending JSON with Content-Type: application/json bypasses Multer entirely,
+      // leaving req.body empty — so nothing was ever saved on PUT requests.
+      const fd = new FormData();
+      Object.entries(payload).forEach(([key, val]) => {
+        if (val !== undefined && val !== null && val !== '') {
+          fd.append(key, String(val));
+        }
       });
 
+      // Remove Content-Type so browser sets multipart/form-data boundary automatically
+      const headers = getAuthHeader();
+      delete headers['Content-Type'];
+
+      const res = await fetch(url, { method, headers, body: fd });
       if (!res.ok) throw new Error(await res.text());
+
+      const savedCandidate = await res.json();
+
+      // ✅ FIX 3: Optimistically update local state immediately from the server
+      // response so the table reflects changes without waiting for fetchData().
+      if (isEditMode) {
+        setCandidates(prev =>
+          prev.map(c => c._id === selectedCandidateId ? { ...c, ...savedCandidate } : c)
+        );
+      }
+
       toast({ title: 'Success', description: `Candidate ${isEditMode ? 'updated' : 'added'}` });
       setIsDialogOpen(false);
-      fetchData();
+      fetchData(); // full re-fetch to sync populated fields (e.g. recruiterId object)
     } catch (err) {
       toast({ title: 'Error', description: 'Failed to save', variant: 'destructive' });
     } finally {

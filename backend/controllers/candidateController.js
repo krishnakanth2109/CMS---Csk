@@ -83,7 +83,9 @@ export const updateCandidate = async (req, res) => {
       body.skills = body.skills.split(',').map(s => s.trim()).filter(Boolean);
     }
 
-    const updatedCandidate = await Candidate.findByIdAndUpdate(req.params.id, body, { new: true });
+    // ✅ FIX: Wrap in $set so only provided fields are updated — without it Mongoose
+    // replaces the entire document, wiping fields like candidateId and resumeUrl.
+    const updatedCandidate = await Candidate.findByIdAndUpdate(req.params.id, { $set: body }, { new: true });
     res.json(updatedCandidate);
   } catch (error) {
     res.status(400).json({ message: error.message });
