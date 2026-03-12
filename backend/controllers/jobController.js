@@ -71,7 +71,7 @@ export const updateJob = async (req, res) => {
     res.status(400).json({ message: error.message });
   }
 };
-
+                 
 // @desc    Delete job
 // @route   DELETE /api/jobs/:id
 export const deleteJob = async (req, res) => {
@@ -81,7 +81,7 @@ export const deleteJob = async (req, res) => {
     
     // Only Admins should delete (usually), but if you allow recruiters:
     await job.deleteOne();
-    res.json({ message: 'Job removed' });
+    res.json({ message: 'Job removed'});
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

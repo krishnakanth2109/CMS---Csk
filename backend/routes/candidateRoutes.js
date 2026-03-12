@@ -267,7 +267,7 @@ router.put('/:id', upload.single('resume'), async (req, res) => {
       }
     }
 
-    const updatedCandidate = await Candidate.findByIdAndUpdate(req.params.id, updateData, { new: true });
+    const updatedCandidate = await Candidate.findByIdAndUpdate(req.params.id, { $set: updateData }, { new: true });
     res.json(updatedCandidate);
   } catch (error) {
     res.status(400).json({ message: error.message });

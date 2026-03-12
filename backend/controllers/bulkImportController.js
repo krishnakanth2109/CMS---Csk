@@ -90,7 +90,7 @@ const getNextCandidateNumber = async () => {
 export const bulkImportCandidates = async (req, res) => {
   const tempFilePath = req.file?.path;
 
-  console.log('=== BULK IMPORT START ===');
+  console.log('=== BULK IMPORT START ==='); 
   console.log('User:', req.user ? `${req.user._id} / ${req.user.firstName} ${req.user.lastName}` : 'NONE');
   console.log('File:', tempFilePath);
 

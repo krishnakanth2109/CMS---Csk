@@ -42,11 +42,7 @@ export const updateCandidateStatus = async (req, res) => {
     // Update candidate
     const updatedCandidate = await Candidate.findByIdAndUpdate(
       req.params.id,
-      { 
-        status: newStatus,
-        updatedBy: req.user._id,
-        updatedAt: new Date()
-      },
+      { $set: { status: newStatus, updatedBy: req.user._id } },
       { new: true, runValidators: false } // Disable schema validation for custom status format
     );
 
@@ -81,11 +77,7 @@ export const updateCandidateRemarks = async (req, res) => {
     // Update candidate remarks
     const updatedCandidate = await Candidate.findByIdAndUpdate(
       req.params.id,
-      { 
-        remarks: remarks || '',
-        updatedBy: req.user._id,
-        updatedAt: new Date()
-      },
+      { $set: { remarks: remarks || '', updatedBy: req.user._id } },
       { new: true }
     );
 
@@ -120,7 +112,6 @@ export const inlineUpdateCandidate = async (req, res) => {
     // Build update object
     const updateData = {
       updatedBy: req.user._id,
-      updatedAt: new Date()
     };
 
     // Add status if provided
@@ -138,7 +129,7 @@ export const inlineUpdateCandidate = async (req, res) => {
     // Update candidate
     const updatedCandidate = await Candidate.findByIdAndUpdate(
       req.params.id,
-      updateData,
+      { $set: updateData },
       { new: true, runValidators: false }
     );
 

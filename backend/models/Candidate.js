@@ -62,7 +62,7 @@ const candidateSchema = mongoose.Schema({
 
   // --- System ---
   active:             { type: Boolean, default: true },
-  dateAdded:          { type: Date, default: Date.now },
+  dateAdded:          { type: Date, default: () => new Date(), immutable: true },
   resumeUrl:          { type: String },
   resumeOriginalName: { type: String },
 }, {
