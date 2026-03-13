@@ -9,6 +9,7 @@ import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/context/AuthContext';
 
 // ✅ FIX: Normalize API_URL — VITE_API_URL on Render has no /api suffix
 const BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/+$/, '');
@@ -16,6 +17,7 @@ const API_URL  = BASE_URL.endsWith('/api') ? BASE_URL : `${BASE_URL}/api`;
 
 export default function AdminReports() {
   const { toast } = useToast();
+  const { authHeaders } = useAuth();
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("month");
   
@@ -25,27 +27,19 @@ export default function AdminReports() {
     monthlyData: []
   });
 
-  // ✅ FIX: Token is stored as JSON under 'currentUser' key, not 'authToken'
-  const getAuthHeader = () => {
-    try {
-      const user = JSON.parse(sessionStorage.getItem('currentUser') || '{}');
-      const token = user.idToken || user.token || user.accessToken || '';
-      return {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      };
-    } catch {
-      return { 'Content-Type': 'application/json' };
-    }
+  // ✅ FIX: Use authHeaders() from useAuth — same as AdminRecruiters and all other pages
+  // This calls Firebase to get a fresh token, works for ALL roles including admin
+  const getAuthHeader = async () => {
+    const ah = await authHeaders();
+    return { 'Content-Type': 'application/json', ...ah };
   };
 
   useEffect(() => {
     const fetchReports = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`${API_URL}/reports?filter=${filter}`, { 
-          headers: getAuthHeader() 
-        });
+        const headers = await getAuthHeader();
+        const res = await fetch(`${API_URL}/reports?filter=${filter}`, { headers });
         
         if (res.ok) {
           const data = await res.json();
