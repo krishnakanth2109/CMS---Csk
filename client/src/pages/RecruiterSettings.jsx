@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   Lock, Loader2, Eye, EyeOff,
   Mail, ShieldCheck, CheckCircle2, RefreshCw,
@@ -6,13 +6,9 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
 
-// ── ENV ───────────────────────────────────────────────────────────────────────
-// VITE_API_URL="http://localhost:5000"  (no trailing /api in .env)
-// We always append /api here so every fetch hits the correct endpoint.
 const BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/$/, '');
 const API_URL  = `${BASE_URL}/api`;
 
-// ── Plain Tailwind helpers — no shadcn dependency ─────────────────────────────
 const TInput = ({ className = '', ...props }) => (
   <input
     className={`w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm
@@ -43,7 +39,6 @@ const TBtn = ({ children, onClick, disabled, className = '', variant = 'primary'
     </button>
   );
 };
-// ─────────────────────────────────────────────────────────────────────────────
 
 const STEPS = { REQUEST: 'request', VERIFY: 'verify', RESET: 'reset', DONE: 'done' };
 
@@ -56,18 +51,13 @@ const PASSWORD_REQS = [
 
 export default function RecruiterSettings() {
   const { toast }       = useToast();
-  const { authHeaders } = useAuth();   // ← async token getter from AuthContext
+  const { authHeaders } = useAuth();
 
-  // ── Auth header builder ───────────────────────────────────────────────────
-  // Uses AuthContext.authHeaders() which auto-refreshes the Firebase token
-  // if it's within 5 minutes of expiry, and respects the 9-hour session cap.
-  // MUST be awaited: const headers = await buildHeaders();
   const buildHeaders = useCallback(async () => {
-    const ah = await authHeaders();    // { Authorization: 'Bearer <fresh-token>' }
+    const ah = await authHeaders();
     return { 'Content-Type': 'application/json', ...ah };
   }, [authHeaders]);
 
-  // ── Read email from session (needed for OTP payload) ──────────────────────
   const getUserEmail = () => {
     try {
       const session = JSON.parse(sessionStorage.getItem('currentUser') || '{}');
@@ -92,6 +82,32 @@ export default function RecruiterSettings() {
 
   const allReqsMet     = PASSWORD_REQS.every(r => r.test(passwords.newPassword));
   const passwordsMatch = passwords.newPassword === passwords.confirmPassword && passwords.newPassword.length > 0;
+
+  // ── KEY FIX: Read ?otp= and ?email= from URL after Firebase redirect ────────
+  // When the user clicks the Firebase email link, Firebase verifies the token
+  // and redirects to continueUrl = /settings?otp=CODE&email=EMAIL
+  // We read these params here, auto-fill the OTP boxes, and jump to step 2.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const otpParam   = params.get('otp');
+    const emailParam = params.get('email');
+
+    if (otpParam && otpParam.length === 6 && /^\d{6}$/.test(otpParam)) {
+      setOtpDigits(otpParam.split(''));
+      setStep(STEPS.VERIFY);
+      startCountdown(600); // 10 min shown as seconds for the verify step
+      toast({
+        title: 'Email Verified!',
+        description: emailParam
+          ? `OTP auto-filled for ${emailParam}. Click Verify OTP to continue.`
+          : 'OTP auto-filled. Click Verify OTP to continue.',
+      });
+
+      // Clean the URL so the OTP isn't visible or reusable on refresh
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState({}, '', cleanUrl);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const startCountdown = (secs = 60) => {
     setCountdown(secs);
@@ -120,16 +136,24 @@ export default function RecruiterSettings() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Failed to send OTP.');
 
+      // Dev mode: backend returns the OTP directly (no FIREBASE_WEB_API_KEY set)
       if (data.devOtp) {
-        setOtpDigits(String(data.devOtp).split(''));
-        toast({ title: 'Dev Mode — OTP auto-filled', description: 'Set FIREBASE_WEB_API_KEY in .env for real email delivery.' });
+        const devCode = String(data.devOtp);
+        setOtpDigits(devCode.split(''));
+        toast({ title: 'Dev Mode — OTP auto-filled', description: 'Add FIREBASE_WEB_API_KEY to .env for real email delivery.' });
+        setStep(STEPS.VERIFY);
+        startCountdown(60);
+        setTimeout(() => box0.current?.focus(), 120);
       } else {
-        toast({ title: 'OTP Sent!', description: `Check your inbox at ${email}.` });
+        // Production: Firebase sends the email. User must click the link.
+        // Page will reload via continueUrl with ?otp= in the URL.
+        toast({
+          title: 'Email Sent!',
+          description: `Check your inbox at ${email}. Click the link in the email to continue.`,
+        });
+        setStep(STEPS.VERIFY);
+        startCountdown(60);
       }
-
-      setStep(STEPS.VERIFY);
-      startCountdown(60);
-      setTimeout(() => box0.current?.focus(), 120);
     } catch (err) {
       toast({ title: 'Send Failed', description: err.message, variant: 'destructive' });
     } finally {
@@ -270,7 +294,8 @@ export default function RecruiterSettings() {
                   <div>
                     <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">Verification Required</p>
                     <p className="text-sm text-blue-700 dark:text-blue-400 mt-0.5">
-                      A 6-digit OTP will be sent to <strong>{getUserEmail() || 'your email'}</strong>.
+                      A verification email will be sent to <strong>{getUserEmail() || 'your email'}</strong>.
+                      Click the link in the email to continue.
                     </p>
                   </div>
                 </div>
@@ -288,7 +313,9 @@ export default function RecruiterSettings() {
             {step === STEPS.VERIFY && (
               <div className="space-y-6">
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Enter the 6-digit code sent to <strong className="text-gray-800 dark:text-gray-200">{getUserEmail()}</strong>. Expires in <strong>10 minutes</strong>.
+                  Enter the 6-digit code from the verification email sent to{' '}
+                  <strong className="text-gray-800 dark:text-gray-200">{getUserEmail()}</strong>.
+                  Expires in <strong>10 minutes</strong>.
                 </p>
 
                 <div className="flex gap-2 justify-center" onPaste={handlePaste}>

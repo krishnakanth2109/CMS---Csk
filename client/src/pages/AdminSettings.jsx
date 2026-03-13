@@ -71,6 +71,30 @@ export default function AdminSettings() {
     } catch { return formData.email || ''; }
   }, [formData.email]);
 
+  // ── KEY FIX: Read ?otp= from URL after Firebase redirect ─────────────────
+  // Firebase sends a password reset email. When the user clicks the link,
+  // Firebase verifies the token then redirects to continueUrl which contains
+  // ?otp=CODE&email=EMAIL. We read it here, auto-fill OTP boxes, jump to step 2.
+  useEffect(() => {
+    const params     = new URLSearchParams(window.location.search);
+    const otpParam   = params.get('otp');
+    const emailParam = params.get('email');
+
+    if (otpParam && otpParam.length === 6 && /^\d{6}$/.test(otpParam)) {
+      setOtpDigits(otpParam.split(''));
+      setStep(STEPS.VERIFY);
+      startCountdown(600);
+      toast({
+        title: 'Email Verified!',
+        description: emailParam
+          ? `OTP auto-filled for ${emailParam}. Click Verify OTP to continue.`
+          : 'OTP auto-filled. Click Verify OTP to continue.',
+      });
+      // Clean URL so OTP isn't visible or reused on refresh
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Fetch profile on mount ────────────────────────────────────────────────
   useEffect(() => {
     (async () => {
@@ -143,14 +167,24 @@ export default function AdminSettings() {
       if (!res.ok) throw new Error(data.message || 'Failed to send OTP.');
 
       if (data.devOtp) {
-        setOtpDigits(String(data.devOtp).split(''));
-        toast({ title: 'Dev Mode — OTP auto-filled', description: 'Set FIREBASE_WEB_API_KEY in .env for real email delivery.' });
+        // Dev mode: no FIREBASE_WEB_API_KEY set, OTP returned directly
+        const devCode = String(data.devOtp);
+        setOtpDigits(devCode.split(''));
+        toast({ title: 'Dev Mode — OTP auto-filled', description: 'Add FIREBASE_WEB_API_KEY to .env for real email delivery.' });
+        setStep(STEPS.VERIFY);
+        startCountdown(60);
+        setTimeout(() => b0.current?.focus(), 120);
       } else {
-        toast({ title: 'OTP Sent!', description: `Check inbox at ${email}.` });
+        // Production: Firebase sends the email. User clicks the link, which
+        // redirects back to this page with ?otp= in the URL. The useEffect above
+        // reads it and auto-fills the boxes.
+        toast({
+          title: 'Email Sent!',
+          description: `Check your inbox at ${email}. Click the link in the email to be redirected back here.`,
+        });
+        setStep(STEPS.VERIFY);
+        startCountdown(60);
       }
-      setStep(STEPS.VERIFY);
-      startCountdown(60);
-      setTimeout(() => b0.current?.focus(), 120);
     } catch (err) {
       toast({ title: 'Send Failed', description: err.message, variant: 'destructive' });
     } finally {

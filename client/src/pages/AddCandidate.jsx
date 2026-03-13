@@ -94,6 +94,7 @@ export default function AdminCandidates() {
   const [candidates, setCandidates] = useState([]);
   const [recruiters, setRecruiters] = useState([]);
   const [clients, setClients] = useState([]);
+  const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isParsingResume, setIsParsingResume] = useState(false);
@@ -136,7 +137,7 @@ export default function AdminCandidates() {
 
   const initialFormData = {
     firstName: '', lastName: '', contact: '', alternateNumber: '', email: '',
-    currentLocation: '', preferredLocation: '', position: '', client: '', currentCompany: '',
+    currentLocation: '', preferredLocation: '', position: '', positionOther: '', client: '', currentCompany: '',
     totalExperience: '', relevantExperience: '',
     ctc: '', currentTakeHome: '', ectc: '', expectedTakeHome: '',
     noticePeriod: '', servingNoticePeriod: 'false', lwd: '',
@@ -150,10 +151,11 @@ export default function AdminCandidates() {
     setLoading(true);
     try {
       const headers = getAuthHeader();
-      const [resCand, resRec, resCli] = await Promise.all([
+      const [resCand, resRec, resCli, resJobs] = await Promise.all([
         fetch(`${API_URL}/candidates`, { headers }),
         fetch(`${API_URL}/recruiters`, { headers }),
         fetch(`${API_URL}/clients`, { headers }),
+        fetch(`${API_URL}/jobs`, { headers }),
       ]);
 
       if (resCand.ok) {
@@ -172,6 +174,11 @@ export default function AdminCandidates() {
       if (resCli.ok) {
         const data = await resCli.json();
         setClients(data);
+      }
+      if (resJobs.ok) {
+        const data = await resJobs.json();
+        // Support both { jobs: [...] } and plain array responses
+        setJobs(Array.isArray(data) ? data : data.jobs || []);
       }
     } catch (e) {
       toast({ title: 'Error', description: 'Network error.', variant: 'destructive' });
@@ -310,6 +317,12 @@ export default function AdminCandidates() {
     // ── Position: required, min 2 chars ──────────────────────────────────────
     if (!d.position.trim()) {
       e.position = 'Role / Position is required';
+    } else if (d.position === 'Other') {
+      if (!d.positionOther.trim()) {
+        e.positionOther = 'Please enter the job opening name';
+      } else if (d.positionOther.trim().length < 2) {
+        e.positionOther = 'Position must be at least 2 characters';
+      }
     } else if (d.position.trim().length < 2) {
       e.position = 'Position must be at least 2 characters';
     }
@@ -370,12 +383,19 @@ export default function AdminCandidates() {
       // This is why the table kept showing the old name after an update.
       const computedName = `${formData.firstName || ''} ${formData.lastName || ''}`.trim();
 
+      // Resolve final position: if "Other" was selected, use the manually typed value
+      const resolvedPosition = formData.position === 'Other'
+        ? formData.positionOther.trim()
+        : formData.position;
+
       const payload = {
         ...formData,
         name: computedName,
+        position: resolvedPosition,
         offersInHand: formData.offersInHand === 'true',
         servingNoticePeriod: formData.servingNoticePeriod === 'true',
       };
+      delete payload.positionOther; // strip UI-only field before sending
 
       // ✅ FIX 2: Use FormData so Multer on the backend can parse req.body.
       // Sending JSON with Content-Type: application/json bypasses Multer entirely,
@@ -437,6 +457,14 @@ export default function AdminCandidates() {
   const openEditDialog = (c) => {
     setIsEditMode(true);
     setSelectedCandidateId(c._id);
+
+    // Determine if the saved position matches a known job title, or is "Other"
+    const savedPosition = c.position || '';
+    const jobTitles = jobs.map(j => j.title || j.jobTitle || j.position || '').filter(Boolean);
+    const isKnownJob = jobTitles.includes(savedPosition);
+    const positionValue = isKnownJob || !savedPosition ? savedPosition : 'Other';
+    const positionOtherValue = !isKnownJob && savedPosition ? savedPosition : '';
+
     setFormData({
       firstName: c.firstName || '',
       lastName: c.lastName || '',
@@ -445,7 +473,8 @@ export default function AdminCandidates() {
       email: c.email || '',
       currentLocation: c.currentLocation || '',
       preferredLocation: c.preferredLocation || '',
-      position: c.position || '',
+      position: positionValue,
+      positionOther: positionOtherValue,
       client: c.client || '',
       currentCompany: c.currentCompany || '',
       totalExperience: c.totalExperience || '',
@@ -1012,8 +1041,37 @@ export default function AdminCandidates() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium mb-1 text-slate-700">Role (Position) *</label>
-                    <input type="text" value={formData.position} onChange={(e) => handleInputChange('position', e.target.value)} className={inputCls(errors.position)} />
+                    <select
+                      value={formData.position}
+                      onChange={(e) => {
+                        handleInputChange('position', e.target.value);
+                        if (e.target.value !== 'Other') handleInputChange('positionOther', '');
+                      }}
+                      className={inputCls(errors.position)}
+                    >
+                      <option value="">Select Job Opening</option>
+                      {jobs.map((j) => {
+                        const title = j.title || j.jobTitle || j.position || '';
+                        return title ? (
+                          <option key={j._id} value={title}>{title}{j.client ? ` — ${j.client}` : ''}</option>
+                        ) : null;
+                      })}
+                      <option value="Other">Other (type manually)</option>
+                    </select>
                     {errors.position && <p className="text-xs text-red-500 mt-1">{errors.position}</p>}
+                    {formData.position === 'Other' && (
+                      <div className="mt-2">
+                        <input
+                          type="text"
+                          value={formData.positionOther}
+                          onChange={(e) => handleInputChange('positionOther', e.target.value)}
+                          className={inputCls(errors.positionOther)}
+                          placeholder="Enter job opening name..."
+                          autoFocus
+                        />
+                        {errors.positionOther && <p className="text-xs text-red-500 mt-1">{errors.positionOther}</p>}
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1 text-slate-700">Client / Target Company *</label>
