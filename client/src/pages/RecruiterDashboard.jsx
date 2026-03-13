@@ -403,7 +403,7 @@ export default function RecruiterDashboard() {
               onClick={() => handleNavigateToCandidates()} 
               className="px-4 py-2 bg-blue-700 text-white text-xs font-medium rounded hover:bg-blue-800 transition-colors"
             >
-              View All Recruiters
+              View All Candidates
             </button>
           </div>
           

@@ -174,6 +174,14 @@ export default function AdminRecruiters() {
     if (data.phone && !/^[6-9]\d{9}$/.test(data.phone))
       e.phone = "Enter a valid 10-digit mobile number";
 
+    // Username (optional but letters only if filled)
+    if (data.username && data.username.trim()) {
+      if (/[^A-Za-z]/.test(data.username.trim()))
+        e.username = "Username must contain letters only";
+      else if (data.username.trim().length < 2)
+        e.username = "Username must be at least 2 characters";
+    }
+
     // Password
     if (!isEdit && !data.password)
       e.password = "Password is required";
@@ -187,6 +195,9 @@ export default function AdminRecruiters() {
   const handleInputChange = (field, value, isEdit) => {
     // Block digits + special chars in name fields — letters, spaces, hyphens, apostrophes only
     if ((field === 'firstName' || field === 'lastName') && value && /[^A-Za-z\s\-'.]/.test(value)) return;
+
+    // Username: letters only — no digits, no special characters
+    if (field === 'username' && value && /[^A-Za-z]/.test(value)) return;
 
     // Phone: digits only, max 10
     if (field === 'phone' && value && !/^\d*$/.test(value)) return;
@@ -865,7 +876,10 @@ export default function AdminRecruiters() {
                   <div>
                     <label className="text-sm font-medium">Username</label>
                     <Input value={newRecruiter.username}
-                      onChange={(e) => handleInputChange('username', e.target.value, false)} />
+                      onChange={(e) => handleInputChange('username', e.target.value, false)}
+                      placeholder="Letters only"
+                      className={errors.username ? "border-red-500" : ""} />
+                    {errors.username && <p className="text-xs text-red-500 mt-1">{errors.username}</p>}
                   </div>
                 </div>
 
@@ -972,7 +986,10 @@ export default function AdminRecruiters() {
                   <div>
                     <label className="text-sm font-medium">Username</label>
                     <Input value={editRecruiter.username}
-                      onChange={(e) => handleInputChange('username', e.target.value, true)} />
+                      onChange={(e) => handleInputChange('username', e.target.value, true)}
+                      placeholder="Letters only"
+                      className={errors.username ? "border-red-500" : ""} />
+                    {errors.username && <p className="text-xs text-red-500 mt-1">{errors.username}</p>}
                   </div>
                 </div>
 
