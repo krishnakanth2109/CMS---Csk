@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { 
   Bell, Calendar, Clock, User, Trash2, Loader2, Plus, 
-  Briefcase, AlertCircle 
+  Briefcase, AlertCircle, Filter 
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -38,6 +38,9 @@ export default function AdminSchedules() {
   const [schedules, setSchedules] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+
+  // Filter State
+  const [filterRecruiter, setFilterRecruiter] = useState("all");
 
   // Form State
   const [selectedCandidateId, setSelectedCandidateId] = useState("");
@@ -87,9 +90,7 @@ export default function AdminSchedules() {
 
     setSubmitting(true);
     try {
-      // Format Date to YYYY-MM-DD
       const dateStr = interviewDate.toISOString().split('T')[0];
-      // Format Time to HH:MM (24-hour)
       const timeStr = interviewDate.toTimeString().split(' ')[0].substring(0, 5);
 
       const payload = {
@@ -145,8 +146,25 @@ export default function AdminSchedules() {
     }
   };
 
-  // Sort upcoming schedules first
-  const visibleSchedules = [...schedules].sort((a, b) => new Date(a.interviewDate).getTime() - new Date(b.interviewDate).getTime());
+  // Extract unique recruiters for the filter dropdown dynamically
+  const availableRecruiters = useMemo(() => {
+    const rMap = new Map();
+    schedules.forEach(s => {
+      if (s.recruiterId?._id) {
+        rMap.set(s.recruiterId._id, s.recruiterId);
+      }
+    });
+    return Array.from(rMap.values());
+  }, [schedules]);
+
+  // Filter and sort the schedules
+  const visibleSchedules = useMemo(() => {
+    let filtered = schedules;
+    if (filterRecruiter !== "all") {
+      filtered = filtered.filter(s => s.recruiterId?._id === filterRecruiter);
+    }
+    return filtered.sort((a, b) => new Date(a.interviewDate).getTime() - new Date(b.interviewDate).getTime());
+  }, [schedules, filterRecruiter]);
 
   return (
     <main className="flex-1 p-4 lg:p-8 overflow-y-auto bg-slate-50 dark:bg-slate-950 min-h-screen">
@@ -256,82 +274,108 @@ export default function AdminSchedules() {
             </div>
           </div>
 
-          {/* Right Column: List of Interviews */}
+          {/* Right Column: List of Interviews Table */}
           <div className="lg:col-span-8 space-y-6">
-             <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-slate-800 min-h-[500px]">
-                <h2 className="text-lg font-bold mb-6 flex items-center gap-2 text-slate-800 dark:text-white">
-                  <Calendar className="w-5 h-5 text-indigo-500" /> Upcoming Interviews
-                </h2>
+             <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden min-h-[500px] flex flex-col">
+                
+                {/* Header & Filter */}
+                <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50/50 dark:bg-slate-900">
+                  <h2 className="text-lg font-bold flex items-center gap-2 text-slate-800 dark:text-white">
+                    <Calendar className="w-5 h-5 text-indigo-500" /> Upcoming Interviews
+                  </h2>
+                  <div className="flex items-center gap-2">
+                    <Filter className="w-4 h-4 text-slate-400" />
+                    <select
+                      value={filterRecruiter}
+                      onChange={(e) => setFilterRecruiter(e.target.value)}
+                      className="px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      <option value="all">All Recruiters</option>
+                      {availableRecruiters.map(r => (
+                        <option key={r._id} value={r._id}>
+                          {r.name || r.firstName || "Unknown"}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
 
                 {loading ? (
-                  <div className="text-center py-12 flex flex-col items-center">
+                  <div className="flex-1 flex flex-col justify-center items-center py-16">
                     <Loader2 className="w-8 h-8 animate-spin text-indigo-500 mb-2"/>
                     <span className="text-slate-500">Loading schedules...</span>
                   </div>
                 ) : visibleSchedules.length === 0 ? (
-                  <div className="text-center py-16 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
-                     <Briefcase className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
-                     <h3 className="text-slate-900 dark:text-white font-medium">No interviews scheduled</h3>
-                     <p className="text-slate-500 text-sm mt-1">There are no upcoming interviews right now.</p>
+                  <div className="flex-1 flex flex-col justify-center items-center py-16 px-4">
+                     <Briefcase className="w-12 h-12 text-slate-300 dark:text-slate-600 mb-3" />
+                     <h3 className="text-slate-900 dark:text-white font-medium">No interviews found</h3>
+                     <p className="text-slate-500 text-sm mt-1 text-center">There are no upcoming interviews matching your criteria.</p>
                   </div>
                 ) : (
-                  <div className="space-y-4">
-                       {visibleSchedules.map((schedule) => (
-                         <div 
-                           key={schedule._id}
-                           className="group relative bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-5 rounded-xl hover:shadow-lg hover:border-indigo-300 dark:hover:border-indigo-700 transition-all duration-300"
-                         >
-                            <div className="absolute left-0 top-4 bottom-4 w-1 bg-indigo-500 rounded-r-full" />
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left border-collapse">
+                      <thead className="bg-slate-100 dark:bg-slate-800/50 text-slate-600 dark:text-slate-400">
+                        <tr>
+                          <th className="px-5 py-3 font-medium whitespace-nowrap">Date & Time</th>
+                          <th className="px-5 py-3 font-medium">Candidate</th>
+                          <th className="px-5 py-3 font-medium">Position</th>
+                          <th className="px-5 py-3 font-medium">Round & Mode</th>
+                          <th className="px-5 py-3 font-medium">Scheduled By</th>
+                          <th className="px-5 py-3 font-medium text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {visibleSchedules.map(schedule => (
+                          <tr key={schedule._id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
                             
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 ml-3">
-                               {/* Time Badge */}
-                               <div className="flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-700 rounded-lg p-3 w-24 text-center shrink-0">
-                                  <span className="text-xs font-semibold text-slate-500 uppercase">{new Date(schedule.interviewDate).toLocaleString('en-US', { month: 'short' })}</span>
-                                  <span className="text-2xl font-bold text-slate-800 dark:text-white leading-none my-1">{new Date(schedule.interviewDate).getDate()}</span>
-                                  <span className="text-xs font-medium text-indigo-600 dark:text-indigo-400">
-                                    {new Date(schedule.interviewDate).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                                  </span>
-                               </div>
+                            <td className="px-5 py-4 whitespace-nowrap">
+                              <div className="font-semibold text-slate-900 dark:text-white">
+                                {new Date(schedule.interviewDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                              </div>
+                              <div className="text-xs text-indigo-600 dark:text-indigo-400 font-bold mt-0.5">
+                                {new Date(schedule.interviewDate).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                              </div>
+                            </td>
 
-                               {/* Details */}
-                               <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2 mb-1.5">
-                                     <h3 className="text-lg font-bold text-slate-900 dark:text-white truncate">
-                                       {schedule.candidateId?.name || "Unknown Candidate"}
-                                     </h3>
-                                     <span className="text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-800">
-                                        {schedule.type}
-                                     </span>
-                                  </div>
-                                  <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-slate-600 dark:text-slate-400">
-                                     <div className="flex items-center gap-1.5">
-                                        <Briefcase className="w-4 h-4 text-slate-400" />
-                                        <span className="truncate">{schedule.candidateId?.position || "Role N/A"}</span>
-                                     </div>
-                                     <div className="flex items-center gap-1.5">
-                                        <User className="w-4 h-4 text-slate-400" />
-                                        <span className="truncate">By: {schedule.recruiterId?.name || schedule.recruiterId?.firstName || "Admin"}</span>
-                                     </div>
-                                     <div className="flex items-center gap-1.5 font-medium text-amber-600 dark:text-amber-500">
-                                        <AlertCircle className="w-4 h-4" />
-                                        <span>{schedule.round}</span>
-                                     </div>
-                                  </div>
-                               </div>
+                            <td className="px-5 py-4">
+                              <div className="font-semibold text-slate-900 dark:text-white">
+                                {schedule.candidateId?.name || "Unknown"}
+                              </div>
+                            </td>
 
-                               {/* Actions */}
-                               <div className="flex items-center gap-2 mt-4 sm:mt-0 pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-slate-700">
-                                  <button 
-                                     onClick={() => handleDelete(schedule._id)}
-                                     className="flex items-center justify-center h-10 w-10 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-colors"
-                                     title="Delete Schedule"
-                                  >
-                                     <Trash2 className="w-5 h-5" />
-                                  </button>
-                               </div>
-                            </div>
-                         </div>
-                       ))}
+                            <td className="px-5 py-4 text-slate-600 dark:text-slate-400">
+                              {schedule.candidateId?.position || "N/A"}
+                            </td>
+
+                            <td className="px-5 py-4">
+                              <div className="flex flex-col gap-1 items-start">
+                                <span className="font-medium text-amber-600 dark:text-amber-500 whitespace-nowrap">
+                                  {schedule.round}
+                                </span>
+                                <span className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
+                                  {schedule.type}
+                                </span>
+                              </div>
+                            </td>
+
+                            <td className="px-5 py-4 text-slate-600 dark:text-slate-400 font-medium">
+                              {schedule.recruiterId?.name || schedule.recruiterId?.firstName || "Admin"}
+                            </td>
+
+                            <td className="px-5 py-4 text-right">
+                               <button 
+                                 onClick={() => handleDelete(schedule._id)} 
+                                 className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors inline-flex"
+                                 title="Delete Schedule"
+                               >
+                                  <Trash2 className="w-4 h-4" />
+                               </button>
+                            </td>
+
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 )}
              </div>

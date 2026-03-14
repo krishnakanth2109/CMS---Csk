@@ -1,13 +1,14 @@
-
 import Interview from '../models/Interview.js';
 import Candidate from '../models/Candidate.js';
 
-// @desc    Get interviews (Admin: All, Recruiter: Own)
+// @desc    Get interviews (Admin & Manager: All, Recruiter: Own)
 // @route   GET /api/interviews
 export const getInterviews = async (req, res) => {
   try {
     let query = {};
-    if (req.user.role !== 'admin') {
+    
+    // Allow both Admin and Manager to fetch all interviews
+    if (req.user.role !== 'admin' && req.user.role !== 'manager') {
       query.recruiterId = req.user._id;
     }
 
