@@ -99,7 +99,7 @@ export default function RecruiterSchedules() {
     candidateId: "", candidateName: "", candidateEmail: "", candidatePhone: "", position: "",
     round: "L1 Interview", interviewDate: new Date().toISOString().split('T')[0], interviewTime: "10:00",
     type: "Virtual", location: "Remote", duration: "60", recruiterId: sessionRecruiterId,
-    notes: "", priority: "medium", meetingLink: ""
+    notes: "", priority: "medium", meetingLink: "", status: "Scheduled"
   });
   const [formErrors, setFormErrors] = useState({});
 
@@ -819,6 +819,29 @@ function NewInterviewModal({ form, errors, onChange, onCandidateSelect, onGenera
                 <option>HR Round</option>
               </select>
             </div>
+
+            <div>
+              <label className="text-sm font-medium block mb-1 text-gray-700 dark:text-gray-200">Mode</label>
+              <select name="type" value={form.type} onChange={onChange} className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="Virtual">Virtual</option>
+                <option value="In-person">In-person</option>
+                <option value="Phone">Phone</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium block mb-1 text-gray-700 dark:text-gray-200">Status</label>
+            <select name="status" value={form.status || "Scheduled"} onChange={onChange} className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option value="Scheduled">Scheduled</option>
+              <option value="Completed">Completed</option>
+              <option value="Shortlisted">Shortlisted</option>
+              <option value="Hold">Hold</option>
+              <option value="Submitted">Submitted</option>
+              <option value="Cancelled">Cancelled</option>
+              <option value="No Show">No Show</option>
+              <option value="Rejected">Rejected</option>
+            </select>
           </div>
           <div>
             <label className="text-sm font-medium block mb-1 text-gray-700 dark:text-gray-200">Link</label>

@@ -49,6 +49,7 @@ export default function AdminSchedules() {
   // Adjusted to match backend enum default values
   const [roundType, setRoundType] = useState("L1 Interview");
   const [interviewMode, setInterviewMode] = useState("Virtual");
+  const [interviewStatus, setInterviewStatus] = useState("Scheduled");
 
   // Fetch Data
   const fetchData = async () => {
@@ -99,6 +100,7 @@ export default function AdminSchedules() {
         interviewTime: timeStr,
         type: interviewMode,
         round: roundType,
+        status: interviewStatus,
         duration: 60
       };
 
@@ -121,6 +123,7 @@ export default function AdminSchedules() {
       setInterviewDate(new Date());
       setRoundType("L1 Interview");
       setInterviewMode("Virtual");
+      setInterviewStatus("Scheduled");
     } catch (error) {
       toast({ title: "Error", description: error.message || "Could not schedule interview.", variant: "destructive" });
     } finally {
@@ -263,6 +266,25 @@ export default function AdminSchedules() {
                   </div>
                 </div>
 
+                {/* Status */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Status</label>
+                  <select
+                    value={interviewStatus}
+                    onChange={(e) => setInterviewStatus(e.target.value)}
+                    className="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm outline-none dark:text-white"
+                  >
+                    <option value="Scheduled">Scheduled</option>
+                    <option value="Completed">Completed</option>
+                    <option value="Shortlisted">Shortlisted</option>
+                    <option value="Hold">Hold</option>
+                    <option value="Submitted">Submitted</option>
+                    <option value="Cancelled">Cancelled</option>
+                    <option value="No Show">No Show</option>
+                    <option value="Rejected">Rejected</option>
+                  </select>
+                </div>
+
                 <button 
                   onClick={handleSchedule} 
                   disabled={submitting}
@@ -320,6 +342,7 @@ export default function AdminSchedules() {
                           <th className="px-5 py-3 font-medium">Candidate</th>
                           <th className="px-5 py-3 font-medium">Position</th>
                           <th className="px-5 py-3 font-medium">Round & Mode</th>
+                          <th className="px-5 py-3 font-medium">Status</th>
                           <th className="px-5 py-3 font-medium">Scheduled By</th>
                           <th className="px-5 py-3 font-medium text-right">Actions</th>
                         </tr>
@@ -356,6 +379,27 @@ export default function AdminSchedules() {
                                   {schedule.type}
                                 </span>
                               </div>
+                            </td>
+
+                            <td className="px-5 py-4">
+                              {(() => {
+                                const s = schedule.status;
+                                const colors = {
+                                  Scheduled:   "bg-blue-100 text-blue-800",
+                                  Completed:   "bg-green-100 text-green-800",
+                                  Shortlisted: "bg-emerald-100 text-emerald-800",
+                                  Hold:        "bg-yellow-100 text-yellow-800",
+                                  Submitted:   "bg-sky-100 text-sky-800",
+                                  Cancelled:   "bg-red-100 text-red-800",
+                                  "No Show":   "bg-red-100 text-red-800",
+                                  Rejected:    "bg-rose-100 text-rose-800",
+                                };
+                                return (
+                                  <span className={`text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap ${colors[s] || "bg-gray-100 text-gray-700"}`}>
+                                    {s || "Scheduled"}
+                                  </span>
+                                );
+                              })()}
                             </td>
 
                             <td className="px-5 py-4 text-slate-600 dark:text-slate-400 font-medium">
