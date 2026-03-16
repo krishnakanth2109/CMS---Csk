@@ -590,19 +590,21 @@ export default function AdminRecruiters() {
                       isAdmin ? 'border-purple-200 bg-purple-50/10' : ''
                     }`}>
                       <CardHeader className="flex flex-row items-start justify-between pb-2">
-                        <div className="flex items-center gap-3">
-                          <div className={`h-12 w-12 rounded-full flex items-center justify-center text-white font-bold overflow-hidden ${isAdmin ? 'bg-gradient-to-br from-purple-500 to-indigo-600' : 'bg-gradient-to-br from-blue-500 to-cyan-500'}`}>
+                        <div className="flex items-start gap-3">
+                          <div className={`h-12 w-12 rounded-full flex items-center justify-center text-white font-bold overflow-hidden flex-shrink-0 mt-0.5 ${isAdmin ? 'bg-gradient-to-br from-purple-500 to-indigo-600' : 'bg-gradient-to-br from-blue-500 to-cyan-500'}`}>
                             {r.profilePicture
                               ? <img src={r.profilePicture} className="w-full h-full object-cover" alt="pfp" />
                               : getInitials(r.firstName, r.lastName)}
                           </div>
-                          <div>
-                            <CardTitle className="text-base flex items-center gap-1">
-                              {r.firstName} {r.lastName}
-                              {isAdmin && <ShieldAlert className="h-4 w-4 text-purple-600" />}
+                          <div className="flex flex-col">
+                            <CardTitle className="text-base leading-tight">
+                              <span className="flex items-center gap-1">
+                                {r.firstName} {r.lastName}
+                                {isAdmin && <ShieldAlert className="h-4 w-4 text-purple-600 flex-shrink-0" />}
+                              </span>
                             </CardTitle>
-                            <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                              {r.recruiterId && <Badge variant="outline" className="text-xs">{r.recruiterId}</Badge>}
+                            <div className="flex items-center gap-1.5 mt-1.5">
+                              {r.recruiterId && <Badge variant="outline" className="text-xs flex-shrink-0">{r.recruiterId}</Badge>}
                               <StatusBadge recruiter={r} />
                             </div>
                           </div>
