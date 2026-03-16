@@ -1,3 +1,4 @@
+// --- START OF FILE AdminRequirements.jsx ---
 import React, { useState, useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
@@ -72,6 +73,7 @@ const JobDetailCard = ({ job, onClose }) => {
                   <div className="space-y-3 text-sm">
                     <p className="flex justify-between"><span className="text-zinc-500">Location:</span> <span className="font-medium">{job.location || "-"}</span></p>
                     <p className="flex justify-between"><span className="text-zinc-500">Max Salary Range:</span> <span className="font-medium">{job.salaryBudget || "-"}</span></p>
+                    <p className="flex justify-between"><span className="text-zinc-500">Monthly Salary:</span> <span className="font-medium">{job.monthlySalary || "-"}</span></p>
                     <p className="flex justify-between"><span className="text-zinc-500">Notice Period:</span> <span className="font-medium">{job.noticePeriod || "-"}</span></p>
                     <div className="pt-2 border-t border-zinc-200 dark:border-zinc-700 mt-2">
                       <p className="flex justify-between mt-2"><span className="text-zinc-500">Primary Recruiter:</span> <span className="font-medium">{job.primaryRecruiter || 'Unassigned'}</span></p>
@@ -118,7 +120,7 @@ export default function AdminRequirements() {
   const initialFormState = {
     jobCode: "", clientName: "", position: "", location: "",
     experience: "", relevantExperience: "", qualification: "",
-    salaryBudget: "", gender: "Any", noticePeriod: "",
+    salaryBudget: "", monthlySalary: "", gender: "Any", noticePeriod: "",
     primaryRecruiter: "", secondaryRecruiter: "", skills: "", jdLink: "",
     active: true,
   };
@@ -227,40 +229,28 @@ export default function AdminRequirements() {
     const { name, value, type, checked } = e.target;
     let newValue = type === 'checkbox' ? checked : value;
 
-    // Strict input filtering based on field type
     if (type !== 'checkbox') {
       if (name === 'position' || name === 'qualification') {
-        // Strip everything except letters and spaces
         newValue = newValue.replace(/[^a-zA-Z\s]/g, '');
       } else if (name === 'experience' || name === 'relevantExperience') {
-        // ✅ Allow numbers and a single decimal point
-        newValue = newValue.replace(/[^0-9.]/g, '');
-        const parts = newValue.split('.');
-        if (parts.length > 2) {
-          newValue = parts[0] + '.' + parts.slice(1).join('');
-        }
+        // ✅ Allow numbers, single decimal point, spaces, and hyphens (e.g. "0.6 - 2")
+        newValue = newValue.replace(/[^0-9.\- ]/g, '');
       } else if (name === 'jobCode') {
-        // Strip invalid characters for Job Code (only allow alphanumeric, hyphens, underscores)
         newValue = newValue.replace(/[^a-zA-Z0-9\-_]/g, '');
       }
     }
 
     setForm({ ...form, [name]: newValue });
 
-    // Clear error for the field being typed in
     if (errors[name]) {
         setErrors(prev => { const n = { ...prev }; delete n[name]; return n; });
     }
   };
 
-  // ✅ SUBMIT VALIDATION (Checks lengths and requirements)
+  // ✅ SUBMIT VALIDATION
   const validateForm = () => {
     const newErrors = {};
     const trimStr = (val) => (typeof val === "string" ? val.trim() : val);
-
-    const code = trimStr(form.jobCode);
-    if (!code) newErrors.jobCode = "Job Code is required";
-    else if (code.length < 2) newErrors.jobCode = "Must be at least 2 characters";
 
     if (!form.clientName) newErrors.clientName = "Please select a client";
     
@@ -273,9 +263,6 @@ export default function AdminRequirements() {
 
     const exp = trimStr(form.experience);
     if (!exp) newErrors.experience = "Experience is required";
-
-    const salary = trimStr(form.salaryBudget);
-    if (!salary) newErrors.salaryBudget = "Salary Range is required";
 
     // Cross-validation: Primary and Secondary recruiters cannot be the same
     if (form.primaryRecruiter && form.secondaryRecruiter && form.primaryRecruiter === form.secondaryRecruiter) {
@@ -307,13 +294,13 @@ export default function AdminRequirements() {
     // Clean payload before sending
     const sanitizedPayload = {
       ...form,
-      jobCode: form.jobCode.trim(),
       position: form.position.trim(),
       location: form.location.trim(),
       experience: form.experience.trim(),
       relevantExperience: form.relevantExperience?.trim() || "",
       qualification: form.qualification?.trim() || "",
-      salaryBudget: form.salaryBudget.trim(),
+      salaryBudget: form.salaryBudget?.trim() || "",
+      monthlySalary: form.monthlySalary?.trim() || "",
       noticePeriod: form.noticePeriod?.trim() || "",
       skills: form.skills.trim(),
       jdLink: form.jdLink?.trim() || ""
@@ -431,11 +418,10 @@ export default function AdminRequirements() {
               </h3>
               
               <div className="grid md:grid-cols-4 gap-5">
-                {/* 1. Job Code */}
+                {/* 1. Job Code - DISABLED (Auto Generated) */}
                 <div className="md:col-span-1">
-                  <label className="block text-xs font-medium text-zinc-500 mb-1">1. Job Code *</label>
-                  <input name="jobCode" placeholder="E.g. JB1001" value={form.jobCode} onChange={handleChange} className={`${inputCls} ${errors.jobCode ? "border-red-500 focus:ring-red-500" : ""}`} />
-                  {errors.jobCode && <p className="text-xs text-red-500 mt-1">{errors.jobCode}</p>}
+                  <label className="block text-xs font-medium text-zinc-500 mb-1">1. Job Code</label>
+                  <input name="jobCode" placeholder="Auto-generated" value={form.jobCode} disabled className={`${inputCls} bg-zinc-100 dark:bg-zinc-800 opacity-70 cursor-not-allowed`} />
                 </div>
 
                 {/* 2. Client */}
@@ -464,15 +450,15 @@ export default function AdminRequirements() {
 
                 {/* 5. Experience */}
                 <div className="md:col-span-1">
-                  <label className="block text-xs font-medium text-zinc-500 mb-1">5. Experience (Years) *</label>
-                  <input name="experience" placeholder="E.g. 5.5" value={form.experience} onChange={handleChange} className={`${inputCls} ${errors.experience ? "border-red-500 focus:ring-red-500" : ""}`} />
+                  <label className="block text-xs font-medium text-zinc-500 mb-1">5. Experience (E.g. 0.6 - 2) *</label>
+                  <input name="experience" placeholder="E.g. 0.6 - 2" value={form.experience} onChange={handleChange} className={`${inputCls} ${errors.experience ? "border-red-500 focus:ring-red-500" : ""}`} />
                   {errors.experience && <p className="text-xs text-red-500 mt-1">{errors.experience}</p>}
                 </div>
 
                 {/* 6. Relevant Experience */}
                 <div className="md:col-span-1">
                   <label className="block text-xs font-medium text-zinc-500 mb-1">6. Relevant Experience (Years)</label>
-                  <input name="relevantExperience" placeholder="E.g. 2.5" value={form.relevantExperience} onChange={handleChange} className={`${inputCls} ${errors.relevantExperience ? "border-red-500 focus:ring-red-500" : ""}`} />
+                  <input name="relevantExperience" placeholder="E.g. 1 - 2" value={form.relevantExperience} onChange={handleChange} className={`${inputCls} ${errors.relevantExperience ? "border-red-500 focus:ring-red-500" : ""}`} />
                   {errors.relevantExperience && <p className="text-xs text-red-500 mt-1">{errors.relevantExperience}</p>}
                 </div>
 
@@ -485,14 +471,19 @@ export default function AdminRequirements() {
 
                 {/* 8. Maximum Salary Range */}
                 <div className="md:col-span-1">
-                  <label className="block text-xs font-medium text-zinc-500 mb-1">8. Maximum Salary Range *</label>
-                  <input name="salaryBudget" placeholder="E.g. 10-12 LPA" value={form.salaryBudget} onChange={handleChange} className={`${inputCls} ${errors.salaryBudget ? "border-red-500 focus:ring-red-500" : ""}`} />
-                  {errors.salaryBudget && <p className="text-xs text-red-500 mt-1">{errors.salaryBudget}</p>}
+                  <label className="block text-xs font-medium text-zinc-500 mb-1">8. Maximum Salary Range</label>
+                  <input name="salaryBudget" placeholder="E.g. 10-12 LPA" value={form.salaryBudget} onChange={handleChange} className={inputCls} />
                 </div>
 
-                {/* 9. Gender */}
+                {/* 9. Monthly Salary */}
                 <div className="md:col-span-1">
-                  <label className="block text-xs font-medium text-zinc-500 mb-1">9. Gender Preference</label>
+                  <label className="block text-xs font-medium text-zinc-500 mb-1">9. Monthly Salary</label>
+                  <input name="monthlySalary" placeholder="E.g. 50k - 60k" value={form.monthlySalary} onChange={handleChange} className={inputCls} />
+                </div>
+
+                {/* 10. Gender */}
+                <div className="md:col-span-1">
+                  <label className="block text-xs font-medium text-zinc-500 mb-1">10. Gender Preference</label>
                   <select name="gender" value={form.gender} onChange={handleChange} className={inputCls}>
                     <option value="Any">Any</option>
                     <option value="Male">Male</option>
@@ -500,16 +491,15 @@ export default function AdminRequirements() {
                   </select>
                 </div>
 
-                {/* 10. N/P (Notice Period) */}
+                {/* 11. N/P (Notice Period) */}
                 <div className="md:col-span-1">
-                  <label className="block text-xs font-medium text-zinc-500 mb-1">10. N/P (Notice Period)</label>
-                  <input name="noticePeriod" placeholder="E.g. 15 Days, Immediate" value={form.noticePeriod} onChange={handleChange} className={`${inputCls} ${errors.noticePeriod ? "border-red-500 focus:ring-red-500" : ""}`} />
-                  {errors.noticePeriod && <p className="text-xs text-red-500 mt-1">{errors.noticePeriod}</p>}
+                  <label className="block text-xs font-medium text-zinc-500 mb-1">11. N/P (Notice Period)</label>
+                  <input name="noticePeriod" placeholder="E.g. 15 Days" value={form.noticePeriod} onChange={handleChange} className={inputCls} />
                 </div>
 
-                {/* 11. Primary Recruiter */}
+                {/* 12. Primary Recruiter */}
                 <div className="md:col-span-1">
-                  <label className="block text-xs font-medium text-zinc-500 mb-1">11. Primary Recruiter</label>
+                  <label className="block text-xs font-medium text-zinc-500 mb-1">12. Primary Recruiter</label>
                   <select name="primaryRecruiter" value={form.primaryRecruiter} onChange={handleChange} className={`${inputCls} ${errors.primaryRecruiter ? "border-red-500 focus:ring-red-500" : ""}`}>
                     <option value="">Select Recruiter</option>
                     {recruiters.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
@@ -517,9 +507,9 @@ export default function AdminRequirements() {
                   {errors.primaryRecruiter && <p className="text-xs text-red-500 mt-1">{errors.primaryRecruiter}</p>}
                 </div>
 
-                {/* 12. Secondary Recruiter */}
+                {/* 13. Secondary Recruiter */}
                 <div className="md:col-span-1">
-                  <label className="block text-xs font-medium text-zinc-500 mb-1">12. Secondary Recruiter</label>
+                  <label className="block text-xs font-medium text-zinc-500 mb-1">13. Secondary Recruiter</label>
                   <select name="secondaryRecruiter" value={form.secondaryRecruiter} onChange={handleChange} className={`${inputCls} ${errors.secondaryRecruiter ? "border-red-500 focus:ring-red-500" : ""}`}>
                     <option value="">Select Recruiter</option>
                     {recruiters.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
@@ -527,16 +517,16 @@ export default function AdminRequirements() {
                   {errors.secondaryRecruiter && <p className="text-xs text-red-500 mt-1">{errors.secondaryRecruiter}</p>}
                 </div>
 
-                {/* 13. Skills */}
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-medium text-zinc-500 mb-1">13. Skills *</label>
+                {/* 14. Skills */}
+                <div className="md:col-span-3">
+                  <label className="block text-xs font-medium text-zinc-500 mb-1">14. Skills *</label>
                   <input name="skills" placeholder="React, Node.js, etc." value={form.skills} onChange={handleChange} className={`${inputCls} ${errors.skills ? "border-red-500 focus:ring-red-500" : ""}`} />
                   {errors.skills && <p className="text-xs text-red-500 mt-1">{errors.skills}</p>}
                 </div>
 
-                {/* 14. JD Link (Optional) */}
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-medium text-zinc-500 mb-1">14. JD Link (Optional)</label>
+                {/* 15. JD Link (Optional) */}
+                <div className="md:col-span-4">
+                  <label className="block text-xs font-medium text-zinc-500 mb-1">15. JD Link (Optional)</label>
                   <input name="jdLink" placeholder="https://..." value={form.jdLink} onChange={handleChange} className={`${inputCls} ${errors.jdLink ? "border-red-500 focus:ring-red-500" : ""}`} />
                   {errors.jdLink && <p className="text-xs text-red-500 mt-1">{errors.jdLink}</p>}
                 </div>
@@ -734,7 +724,6 @@ export default function AdminRequirements() {
                             <button onClick={() => handleToggleActive(job)} title={job.active !== false ? "Mark as Inactive" : "Mark as Active"} className={`p-1.5 rounded-lg transition-colors ${job.active !== false ? 'text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-zinc-800 dark:hover:text-red-400' : 'text-zinc-400 hover:bg-green-50 hover:text-green-600 dark:hover:bg-zinc-800 dark:hover:text-green-400'}`}>
                               {job.active !== false ? <NoSymbolIcon className="w-5 h-5" /> : <CheckCircleIcon className="w-5 h-5" />}
                             </button>
-                            {/* ✅ Delete Button added here */}
                             <button onClick={() => handleDeleteJob(job.id)} title="Delete Requirement" className="p-1.5 rounded-lg text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-zinc-800 dark:hover:text-red-400 transition-colors">
                               <TrashIcon className="w-5 h-5" />
                             </button>

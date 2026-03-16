@@ -1,3 +1,4 @@
+// --- START OF FILE jobController.js ---
 import Job from '../models/Job.js';
 
 // @desc    Get jobs (All for Admin, Assigned only for Recruiter)
@@ -7,11 +8,7 @@ export const getJobs = async (req, res) => {
     let query = {};
 
     // ── FILTERING LOGIC ─────────────────────────────────────────────
-    // If the logged-in user is a Recruiter, restrict results
     if (req.user && req.user.role === 'recruiter') {
-      
-      // Generate all possible variations of the recruiter's name 
-      // to ensure we catch the exact string saved by the Admin.
       const possibleNames = [
         (req.user.firstName && req.user.lastName) ? `${req.user.firstName} ${req.user.lastName}` : null,
         req.user.name,
@@ -19,7 +16,7 @@ export const getJobs = async (req, res) => {
         req.user.username,
         req.user.firstName,
         req.user.email
-      ].filter(Boolean); // Removes nulls and undefined values
+      ].filter(Boolean);
 
       query = {
         $or: [
@@ -46,6 +43,21 @@ export const createJob = async (req, res) => {
       createdBy: req.user._id
     };
 
+    // --- AUTO-GENERATE JOB CODE (REQ0001 format) ---
+    // Fetch all jobs that match the REQ + numbers pattern
+    const allReqJobs = await Job.find({ jobCode: /^REQ\d+$/ }, 'jobCode');
+    
+    let maxNum = 0;
+    allReqJobs.forEach(job => {
+      const num = parseInt(job.jobCode.replace('REQ', ''), 10);
+      if (num > maxNum) maxNum = num;
+    });
+    
+    // Increment the highest found sequence
+    const nextSequence = maxNum + 1;
+    jobData.jobCode = `REQ${String(nextSequence).padStart(4, '0')}`;
+    // ----------------------------------------------
+
     const job = await Job.create(jobData);
     res.status(201).json(job);
   } catch (error) {
@@ -61,17 +73,6 @@ export const updateJob = async (req, res) => {
     const job = await Job.findById(req.params.id);
     if (!job) return res.status(404).json({ message: 'Job not found' });
 
-    // Optional: Prevent recruiters from editing jobs they aren't assigned to
-    // (Uncomment if strict security is needed)
-    /*
-    if (req.user.role === 'recruiter') {
-       const rName = req.user.name || `${req.user.firstName} ${req.user.lastName}`;
-       if (job.primaryRecruiter !== rName && job.secondaryRecruiter !== rName) {
-         return res.status(403).json({ message: 'Not authorized to edit this job' });
-       }
-    }
-    */
-
     const updatedJob = await Job.findByIdAndUpdate(req.params.id, req.body, { new: true });
     res.json(updatedJob);
   } catch (error) {
@@ -86,7 +87,6 @@ export const deleteJob = async (req, res) => {
     const job = await Job.findById(req.params.id);
     if (!job) return res.status(404).json({ message: 'Job not found' });
     
-    // Only Admins should delete (usually), but if you allow recruiters:
     await job.deleteOne();
     res.json({ message: 'Job removed'});
   } catch (error) {

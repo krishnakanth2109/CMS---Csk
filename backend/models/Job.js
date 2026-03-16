@@ -1,3 +1,4 @@
+// --- START OF FILE Job.js ---
 import mongoose from 'mongoose';
 
 const jobSchema = mongoose.Schema({
@@ -8,9 +9,10 @@ const jobSchema = mongoose.Schema({
   experience: { type: String, default: '' },
   relevantExperience: { type: String, default: '' },
   qualification: { type: String, default: '' },
-  salaryBudget: { type: String, default: '' }, // Mapped to "Maximum Salary Range" in UI
+  salaryBudget: { type: String, default: '' }, // Maximum Salary Range
+  monthlySalary: { type: String, default: '' }, // NEW: Monthly Salary
   gender: { type: String, enum: ['Any', 'Male', 'Female'], default: 'Any' },
-  noticePeriod: { type: String, default: '' }, // NEW FIELD: N/P (Notice Period)
+  noticePeriod: { type: String, default: '' },
   primaryRecruiter: { type: String, default: '' },
   secondaryRecruiter: { type: String, default: '' },
   skills: { type: String, default: '' },

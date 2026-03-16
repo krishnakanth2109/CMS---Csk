@@ -1,3 +1,4 @@
+// --- START OF FILE interviewController.js ---
 import Interview from '../models/Interview.js';
 import Candidate from '../models/Candidate.js';
 
@@ -13,7 +14,8 @@ export const getInterviews = async (req, res) => {
     }
 
     const interviews = await Interview.find(query)
-      .populate('candidateId', 'name email phone position')
+      // ✅ FIX: Added firstName and lastName to populate string to handle legacy candidate data
+      .populate('candidateId', 'name firstName lastName email contact position')
       .populate('recruiterId', 'name firstName lastName email')
       .sort({ interviewDate: 1 });
 

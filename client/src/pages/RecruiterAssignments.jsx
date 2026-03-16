@@ -1,3 +1,4 @@
+// --- START OF FILE RecruiterAssignments.jsx ---
 import React, { useState, useMemo, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -79,7 +80,7 @@ const NativeSelect = ({ value, onChange, children, disabled, className = '' }) =
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function RecruiterAssignments() {
-  const { authHeaders } = useAuth(); // ✅ FIX: Use dynamic auth headers
+  const { authHeaders } = useAuth();
   const { toast } = useToast();
   
   const [jobs, setJobs] = useState([]);
@@ -100,7 +101,7 @@ export default function RecruiterAssignments() {
   const [submitting, setSubmitting] = useState(false);
 
   const initialJobForm = {
-    jobCode: '', clientName: '', position: '', skills: '', salaryBudget: '',
+    jobCode: '', clientName: '', position: '', skills: '', salaryBudget: '', monthlySalary: '',
     location: '', experience: '', gender: 'Any', interviewMode: 'Virtual',
     tatTime: '', jdLink: '', comments: '', primaryRecruiter: '', secondaryRecruiter: ''
   };
@@ -111,7 +112,6 @@ export default function RecruiterAssignments() {
     companyName: '', industry: '', location: '', website: '', contactPerson: '', email: '', phone: ''
   });
 
-  // ✅ FIX: Standardized header fetch function
   const getAuthHeader = async () => {
     const h = await authHeaders();
     return { 'Content-Type': 'application/json', ...h };
@@ -120,7 +120,7 @@ export default function RecruiterAssignments() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const headers = await getAuthHeader(); // ✅ Inject headers
+      const headers = await getAuthHeader();
       const [resJobs, resRecs, resClients] = await Promise.all([
         fetch(`${API_URL}/jobs`, { headers }),
         fetch(`${API_URL}/users/active-list`, { headers }),
@@ -142,36 +142,9 @@ export default function RecruiterAssignments() {
 
   useEffect(() => { fetchData(); }, []);
 
-  // STANDARD NAME FORMATTING LOGIC
   const formatRecruiterName = (r) => {
     if (r.firstName && r.lastName) return `${r.firstName} ${r.lastName}`;
     return r.name || r.username || r.fullName || r.firstName || r.email || 'Unknown';
-  };
-
-  const handleCreateClient = async () => {
-    if (!clientForm.companyName.trim()) return toast({ title: "Validation", description: "Company Name is required", variant: "destructive" });
-    if (!clientForm.contactPerson.trim()) return toast({ title: "Validation", description: "Contact Person is required", variant: "destructive" });
-    if (!clientForm.email.trim()) return toast({ title: "Validation", description: "Email is required", variant: "destructive" });
-
-    setSubmitting(true);
-    try {
-      const headers = await getAuthHeader();
-      const res = await fetch(`${API_URL}/clients`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(clientForm)
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to create client");
-      toast({ title: "Success", description: "Client added successfully" });
-      setIsClientModalOpen(false);
-      fetchData();
-      setClientForm({ companyName: '', industry: '', location: '', website: '', contactPerson: '', email: '', phone: '' });
-    } catch (err) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
-    } finally {
-      setSubmitting(false);
-    }
   };
 
   const openViewModal = (job) => {
@@ -181,6 +154,7 @@ export default function RecruiterAssignments() {
       position: job.position || '',
       skills: job.skills || '',
       salaryBudget: job.salaryBudget || '',
+      monthlySalary: job.monthlySalary || '',
       location: job.location || '',
       experience: job.experience || '',
       gender: job.gender || 'Any',
@@ -197,7 +171,7 @@ export default function RecruiterAssignments() {
   };
 
   const handleCreateJob = async () => {
-    if (!jobForm.jobCode.trim()) return toast({ title: "Validation", description: "Job Code is required", variant: "destructive" });
+    // Removed jobCode validation because it's auto-generated in the backend
     if (!jobForm.position.trim()) return toast({ title: "Validation", description: "Position is required", variant: "destructive" });
     if (!jobForm.clientName) return toast({ title: "Validation", description: "Client is required", variant: "destructive" });
     
@@ -321,7 +295,7 @@ export default function RecruiterAssignments() {
                     <button className="h-8 w-8 flex items-center justify-center text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800 rounded-lg transition-colors" onClick={() => openViewModal(job)}>
                       <EyeIcon className="w-4 h-4"/>
                     </button>
-                    {/* Only show delete if user created it or has permission - simplistic check here */}
+                    {/* Only show delete if user created it or has permission */}
                     <button className="h-8 w-8 flex items-center justify-center text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors" onClick={() => { setJobToDelete(job); setDeleteDialogOpen(true); }}>
                       <TrashIcon className="w-4 h-4"/>
                     </button>
@@ -372,8 +346,8 @@ export default function RecruiterAssignments() {
         <ModalBody>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
-              <Label htmlFor="jobCode">Job Code *</Label>
-              <Input id="jobCode" placeholder="e.g. JB-1001" value={jobForm.jobCode} onChange={e => setJobForm({...jobForm, jobCode: e.target.value})} disabled={isEditMode}/>
+              <Label htmlFor="jobCode">Job Code</Label>
+              <Input id="jobCode" placeholder="Auto-generated" value={jobForm.jobCode} onChange={e => setJobForm({...jobForm, jobCode: e.target.value})} disabled className="bg-zinc-100 dark:bg-zinc-800 opacity-70 cursor-not-allowed"/>
             </div>
             <div>
               <Label htmlFor="clientName">Client *</Label>
@@ -388,16 +362,20 @@ export default function RecruiterAssignments() {
               <Input id="position" placeholder="e.g. React Developer" value={jobForm.position} onChange={e => setJobForm({...jobForm, position: e.target.value})} disabled={isEditMode}/>
             </div>
             <div>
-              <Label htmlFor="salaryBudget">Salary Budget</Label>
+              <Label htmlFor="salaryBudget">Maximum Salary Range</Label>
               <Input id="salaryBudget" placeholder="e.g. 15 LPA" value={jobForm.salaryBudget} onChange={e => setJobForm({...jobForm, salaryBudget: e.target.value})} disabled={isEditMode}/>
             </div>
             <div>
-              <Label htmlFor="location">Location</Label>
+              <Label htmlFor="monthlySalary">Monthly Salary</Label>
+              <Input id="monthlySalary" placeholder="e.g. 50k - 60k" value={jobForm.monthlySalary} onChange={e => setJobForm({...jobForm, monthlySalary: e.target.value})} disabled={isEditMode}/>
+            </div>
+            <div>
+              <Label htmlFor="location">Location *</Label>
               <Input id="location" value={jobForm.location} onChange={e => setJobForm({...jobForm, location: e.target.value})} disabled={isEditMode}/>
             </div>
             <div>
-              <Label htmlFor="experience">Experience</Label>
-              <Input id="experience" placeholder="e.g. 3-5 Years" value={jobForm.experience} onChange={e => setJobForm({...jobForm, experience: e.target.value})} disabled={isEditMode}/>
+              <Label htmlFor="experience">Experience (E.g. 0.6 - 2) *</Label>
+              <Input id="experience" placeholder="e.g. 0.6 - 2" value={jobForm.experience} onChange={e => setJobForm({...jobForm, experience: e.target.value})} disabled={isEditMode}/>
             </div>
             <div>
               <Label htmlFor="tatTime">Target Date (TAT)</Label>
@@ -421,7 +399,6 @@ export default function RecruiterAssignments() {
               <NativeSelect value={jobForm.primaryRecruiter} onChange={val => setJobForm({...jobForm, primaryRecruiter: val})} disabled={isEditMode}>
                 <option value="">Select Recruiter</option>
                 <option value="Unassigned">None</option>
-                {/* Updated to show Full Name */}
                 {recruiters.map(r => {
                   const name = formatRecruiterName(r);
                   return <option key={r._id} value={name}>{name}</option>;
@@ -441,7 +418,7 @@ export default function RecruiterAssignments() {
             </div>
 
             <div className="col-span-1 md:col-span-2">
-              <Label>Required Skills</Label>
+              <Label>Required Skills *</Label>
               <textarea className="w-full border border-zinc-300 dark:border-zinc-700 rounded-lg px-3 py-2 text-sm min-h-[80px] bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 placeholder-zinc-400" value={jobForm.skills} onChange={e => setJobForm({...jobForm, skills: e.target.value})} disabled={isEditMode}/>
             </div>
           </div>
@@ -464,7 +441,7 @@ export default function RecruiterAssignments() {
       <Modal open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
         <ModalHeader>
           <ModalTitle>Delete Requirement?</ModalTitle>
-          <ModalDesc>This will permanently delete the job <strong>{jobToDelete?.jobCode}</strong>. This action cannot be undone.</ModalDesc>
+          <ModalDesc>This will permanently delete the job. This action cannot be undone.</ModalDesc>
         </ModalHeader>
         <ModalFooter>
           <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
