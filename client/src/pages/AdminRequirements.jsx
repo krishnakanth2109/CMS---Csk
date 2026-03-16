@@ -204,11 +204,14 @@ export default function AdminRequirements() {
       if(recRes.ok) {
         const data = await recRes.json();
         const recruitersArray = Array.isArray(data) ? data : data.data || data.recruiters || [];
-        setRecruiters(recruitersArray.map((r) => ({ 
-          id: r._id || r.id, 
-          name: r.name || r.username || r.fullName || r.firstName || r.email || `Unnamed Recruiter`, 
-          email: r.email 
-        })));
+        
+        // STANDARD NAME FORMATTING LOGIC
+        setRecruiters(recruitersArray.map((r) => {
+          let recName = r.name || r.username || r.fullName || r.email || 'Unnamed Recruiter';
+          if (r.firstName && r.lastName) recName = `${r.firstName} ${r.lastName}`;
+          
+          return { id: r._id || r.id, name: recName, email: r.email };
+        }));
       }
     } catch (error) {
       toast({ title: "Error loading data", variant: "destructive" });

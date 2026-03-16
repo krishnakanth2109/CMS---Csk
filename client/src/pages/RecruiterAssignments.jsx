@@ -79,7 +79,7 @@ const NativeSelect = ({ value, onChange, children, disabled, className = '' }) =
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function RecruiterAssignments() {
-  const { user } = useAuth();
+  const { authHeaders } = useAuth(); // ✅ FIX: Use dynamic auth headers
   const { toast } = useToast();
   
   const [jobs, setJobs] = useState([]);
@@ -111,18 +111,20 @@ export default function RecruiterAssignments() {
     companyName: '', industry: '', location: '', website: '', contactPerson: '', email: '', phone: ''
   });
 
-  const getAuthHeader = () => ({
-    'Authorization': `Bearer ${sessionStorage.getItem('authToken')}`,
-    'Content-Type': 'application/json'
-  });
+  // ✅ FIX: Standardized header fetch function
+  const getAuthHeader = async () => {
+    const h = await authHeaders();
+    return { 'Content-Type': 'application/json', ...h };
+  };
 
   const fetchData = async () => {
     setLoading(true);
     try {
+      const headers = await getAuthHeader(); // ✅ Inject headers
       const [resJobs, resRecs, resClients] = await Promise.all([
-        fetch(`${API_URL}/jobs`, { headers: getAuthHeader() }),
-        fetch(`${API_URL}/users/active-list`, { headers: getAuthHeader() }),
-        fetch(`${API_URL}/clients`, { headers: getAuthHeader() })
+        fetch(`${API_URL}/jobs`, { headers }),
+        fetch(`${API_URL}/users/active-list`, { headers }),
+        fetch(`${API_URL}/clients`, { headers })
       ]);
       if (resJobs.ok) {
         const data = await resJobs.json();
@@ -140,10 +142,10 @@ export default function RecruiterAssignments() {
 
   useEffect(() => { fetchData(); }, []);
 
-  // Helper to format recruiter name safely
+  // STANDARD NAME FORMATTING LOGIC
   const formatRecruiterName = (r) => {
     if (r.firstName && r.lastName) return `${r.firstName} ${r.lastName}`;
-    return r.name || 'Unknown';
+    return r.name || r.username || r.fullName || r.firstName || r.email || 'Unknown';
   };
 
   const handleCreateClient = async () => {
@@ -153,9 +155,10 @@ export default function RecruiterAssignments() {
 
     setSubmitting(true);
     try {
+      const headers = await getAuthHeader();
       const res = await fetch(`${API_URL}/clients`, {
         method: 'POST',
-        headers: getAuthHeader(),
+        headers,
         body: JSON.stringify(clientForm)
       });
       const data = await res.json();
@@ -169,12 +172,6 @@ export default function RecruiterAssignments() {
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const openCreateModal = () => {
-    setJobForm(initialJobForm);
-    setIsEditMode(false);
-    setIsJobModalOpen(true);
   };
 
   const openViewModal = (job) => {
@@ -206,9 +203,10 @@ export default function RecruiterAssignments() {
     
     setSubmitting(true);
     try {
+      const headers = await getAuthHeader();
       const res = await fetch(`${API_URL}/jobs`, {
         method: 'POST',
-        headers: getAuthHeader(),
+        headers,
         body: JSON.stringify(jobForm)
       });
       const data = await res.json();
@@ -226,9 +224,10 @@ export default function RecruiterAssignments() {
   const handleDeleteJob = async () => {
     if (!jobToDelete) return;
     try {
+      const headers = await getAuthHeader();
       const res = await fetch(`${API_URL}/jobs/${jobToDelete._id}`, {
         method: 'DELETE',
-        headers: getAuthHeader()
+        headers
       });
       if (!res.ok) throw new Error("Failed to delete job");
       toast({ title: "Success", description: "Job deleted successfully" });
@@ -267,12 +266,6 @@ export default function RecruiterAssignments() {
                 Showing jobs assigned to you
               </p>
             </div>
-            
-            {/* 
-              Recruiters typically don't create jobs, but if they do, 
-              this button is here. Logic can be hidden if needed.
-            */}
-          
           </div>
 
           {/* Search / View Toggle */}
@@ -464,44 +457,6 @@ export default function RecruiterAssignments() {
               </Button>
             </>
           )}
-        </ModalFooter>
-      </Modal>
-
-      {/* Add New Client Modal */}
-      <Modal open={isClientModalOpen} onClose={() => setIsClientModalOpen(false)}>
-        <ModalHeader>
-          <ModalTitle>Add New Client</ModalTitle>
-          <ModalDesc>Add a client to assign jobs to. <strong>Required: Name, Email, Contact Person.</strong></ModalDesc>
-        </ModalHeader>
-        <ModalBody>
-          <div className="space-y-4">
-            <div>
-              <Label>Company Name *</Label>
-              <Input value={clientForm.companyName} onChange={e => setClientForm({...clientForm, companyName: e.target.value})} placeholder="e.g. Google"/>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Contact Person *</Label>
-                <Input value={clientForm.contactPerson} onChange={e => setClientForm({...clientForm, contactPerson: e.target.value})} placeholder="e.g. John Doe"/>
-              </div>
-              <div>
-                <Label>Email *</Label>
-                <Input value={clientForm.email} onChange={e => setClientForm({...clientForm, email: e.target.value})} placeholder="hr@company.com"/>
-              </div>
-            </div>
-            <div>
-              <Label>Industry</Label>
-              <Input value={clientForm.industry} onChange={e => setClientForm({...clientForm, industry: e.target.value})}/>
-            </div>
-            <div>
-              <Label>Location</Label>
-              <Input value={clientForm.location} onChange={e => setClientForm({...clientForm, location: e.target.value})}/>
-            </div>
-          </div>
-        </ModalBody>
-        <ModalFooter>
-          <Button variant="outline" onClick={() => setIsClientModalOpen(false)}>Cancel</Button>
-          <Button onClick={handleCreateClient} disabled={submitting}>Save Client</Button>
         </ModalFooter>
       </Modal>
 

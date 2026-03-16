@@ -10,14 +10,21 @@ export const getJobs = async (req, res) => {
     // If the logged-in user is a Recruiter, restrict results
     if (req.user && req.user.role === 'recruiter') {
       
-      // Construct the full name to match the string stored in Job Model
-      // Handles both legacy 'name' and new 'firstName/lastName' fields
-      const recruiterName = req.user.name || `${req.user.firstName} ${req.user.lastName}`;
+      // Generate all possible variations of the recruiter's name 
+      // to ensure we catch the exact string saved by the Admin.
+      const possibleNames = [
+        (req.user.firstName && req.user.lastName) ? `${req.user.firstName} ${req.user.lastName}` : null,
+        req.user.name,
+        req.user.fullName,
+        req.user.username,
+        req.user.firstName,
+        req.user.email
+      ].filter(Boolean); // Removes nulls and undefined values
 
       query = {
         $or: [
-          { primaryRecruiter: recruiterName },
-          { secondaryRecruiter: recruiterName }
+          { primaryRecruiter: { $in: possibleNames } },
+          { secondaryRecruiter: { $in: possibleNames } }
         ]
       };
     }
