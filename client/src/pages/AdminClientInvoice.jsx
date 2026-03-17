@@ -8,7 +8,9 @@ import {
   BuildingOfficeIcon,
   CalculatorIcon,
   MagnifyingGlassIcon,
-  PlusIcon
+  PlusIcon,
+  EyeIcon,
+  EyeSlashIcon
 } from "@heroicons/react/24/outline";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
@@ -101,10 +103,12 @@ const AdminClientInvoice = () => {
     payment: 0,
     accountType: "default",
     accountDetails: defaultAccountDetails,
+    selectedCandidates: [],
   });
 
   const [showPreview, setShowPreview] = useState(false);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState("");
+  const [showCandidateList, setShowCandidateList] = useState(false);
 
   const getAuthHeader = async () => ({
     "Content-Type": "application/json",
@@ -144,6 +148,41 @@ const AdminClientInvoice = () => {
     toast({ title: `Auto-filled details for ${candidate.name}` });
   };
 
+  const addCandidateToList = () => {
+    if (!form.candidateName) {
+      toast({ title: "Please select or enter a candidate name", variant: "destructive" });
+      return;
+    }
+    const newCandidate = {
+      id: Date.now(),
+      name: form.candidateName,
+      role: form.role,
+      joiningDate: form.joiningDate,
+      actualSalary: form.actualSalary,
+      percentage: form.percentage,
+      payment: form.payment
+    };
+    setForm(prev => ({
+      ...prev,
+      selectedCandidates: [...prev.selectedCandidates, newCandidate],
+      candidateName: "",
+      joiningDate: "",
+      role: "",
+      actualSalary: "",
+      percentage: "",
+      payment: 0
+    }));
+    setShowCandidateList(true);
+    toast({ title: "Candidate added to list" });
+  };
+
+  const removeCandidateFromList = (id) => {
+    setForm(prev => ({
+      ...prev,
+      selectedCandidates: prev.selectedCandidates.filter(c => c.id !== id)
+    }));
+  };
+
   const selectedClient = useMemo(() => clients.find((c) => c.id === form.clientId), [clients, form.clientId]);
 
   // Handle Payment Calculation
@@ -167,41 +206,40 @@ const AdminClientInvoice = () => {
       const pages = pdfDoc.getPages();
       const firstPage = pages[0];
 
-      const { height } = firstPage.getSize();
+      const { width, height } = firstPage.getSize();
       // Assume A4 size, commonly standard height is ~841.89 points
       // pdf-lib's origin (0,0) is bottom-left.
 
       const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
       const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-      const drawText = (text, x, y, size = 10, isBold = false) => {
-        if (!text) return;
-        firstPage.drawText(String(text), {
+      const drawText = (text, x, y, size = 9.5, isBold = false) => {
+        if (!text || text === "undefined") return;
+        firstPage.drawText(String(text).trim(), {
           x,
-          y: height - y, // Invert Y to match regular top-down spacing
+          y: height - y - (size / 3), 
           size,
-          color: rgb(0.1, 0.1, 0.1),
+          color: rgb(0, 0, 0),
           font: isBold ? helveticaBold : helvetica,
         });
       };
 
-      const drawTextCentered = (text, centerX, y, maxW, isBold = false) => {
-        if (!text) return;
-        const str = String(text);
+      const drawTextCentered = (text, centerX, y, maxW, isBold = false, size = 9.5) => {
+        if (!text || text === "undefined") return;
         const font = isBold ? helveticaBold : helvetica;
-        let sz = 10;
-        let w = font.widthOfTextAtSize(str, sz);
-        // Shrink font size linearly until perfectly fits inside column bounding box!
-        while (w > maxW && sz > 4) {
+        let sz = size;
+        let t = String(text).trim();
+        let w = font.widthOfTextAtSize(t, sz);
+        while (w > maxW && sz > 5) {
           sz -= 0.5;
-          w = font.widthOfTextAtSize(str, sz);
+          w = font.widthOfTextAtSize(t, sz);
         }
         const x = centerX - (w / 2);
-        firstPage.drawText(str, {
+        firstPage.drawText(t, {
           x,
-          y: height - y,
+          y: height - y - (sz / 3),
           size: sz,
-          color: rgb(0.1, 0.1, 0.1),
+          color: rgb(0, 0, 0),
           font,
         });
       };
@@ -261,67 +299,125 @@ const AdminClientInvoice = () => {
         opacity: 1,
       });
 
-      // -- Date: label + value together at top right --
-      drawText('Date:', 430, 120, 10, true);
-      drawText(getOrdinalDate(form.invoiceDate), 463, 120, 10);
+      // -- Date: Aligned with template --
+      drawText(getOrdinalDate(form.invoiceDate), 468, 118, 10);
 
-      // -- No: INV-xxxx: LEFT side, just above "SUB: Final Invoice" --
-      drawText(`No: ${form.invoiceNumber}`, 68, 288, 10);
+      // -- Deep Clean of Template Table Layer --
+      // Using a slightly wider and taller mask to catch all border artifacts
+      firstPage.drawRectangle({
+        x: 45,
+        y: height - 760,
+        width: 520,
+        height: 500, 
+        color: rgb(1, 1, 1),
+      });
 
-      // -- Table Row Start --
-      const rowY = 384; // Exact vertical center baseline for Row 1
+      // -- Redraw No: and SUB: after cleaning (Aligned with table at X=68) --
+      drawText(`No: ${form.invoiceNumber}`, 68, 280, 10, true);
+      drawText("SUB: Final Invoice", 68, 298, 10, true);
 
-      // Centered Alignment Mapping ensuring strict boundaries based exactly on column headers
-      // 1. S.no 
-      drawTextCentered("1", 74.5, rowY, 20);
-      // 2. Candidate Name (Split into two lines if it contains space)
-      const candParts = (form.candidateName || "").trim().split(" ");
-      if (candParts.length > 1) {
-        const line1 = candParts.slice(0, Math.ceil(candParts.length / 2)).join(" ");
-        const line2 = candParts.slice(Math.ceil(candParts.length / 2)).join(" ");
-        drawTextCentered(line1, 138.5, rowY - 5, 85);
-        drawTextCentered(line2, 138.5, rowY + 5, 85);
-      } else {
-        drawTextCentered(form.candidateName, 138.5, rowY, 85);
-      }
-      // 3. Role
-      drawTextCentered(form.role, 220, rowY, 65);
-      // 4. Joining Date
-      const joinStr = form.joiningDate ? getOrdinalDate(form.joiningDate) : "";
-      drawTextCentered(joinStr, 305, rowY, 70);
-      // 5. Salary
-      const salStr = form.actualSalary ? Number(form.actualSalary).toLocaleString("en-IN") : "";
-      drawTextCentered(salStr, 379.5, rowY, 60);
-      // 6. Percentage
-      const percStr = form.percentage ? `${form.percentage}%` : "";
-      drawTextCentered(percStr, 447, rowY, 50);
-      // 7. Payment (Current row)
-      const payStr = form.payment ? Number(form.payment).toLocaleString("en-IN") : "0";
-      drawTextCentered(payStr, 517.5, rowY, 60);
+      // -- TAX INVOICE Title --
+      drawTextCentered("TAX INVOICE", width / 2, 320, 200, true, 14);
 
-      // -- Total Row --
-      const totalY = 430; // Y position for the Total Payment (perfectly vertical center aligned)
-      drawTextCentered(payStr, 517.5, totalY, 60, true);
+      const cands = form.selectedCandidates.length > 0 ? form.selectedCandidates : (form.candidateName ? [{name: form.candidateName, role: form.role, joiningDate: form.joiningDate, actualSalary: form.actualSalary, percentage: form.percentage, payment: form.payment}] : []);
+      
+      // -- Dynamic Layout Tuning for Large Lists --
+      const candidateCount = cands.length;
+      const isLargeList = candidateCount > 5;
+      
+      let rowHR = 22; 
+      let rowDR = isLargeList ? 21 : 26; 
+      let currentY = isLargeList ? 342 : 345;
+      const headerFs = 10;
+      const dataFs = isLargeList ? 8.5 : 9.5;
+      const accFs = isLargeList ? 8.5 : 10;
+      const accSpacing = isLargeList ? 13 : 16;
 
-      // -- In Words --
-      // Set to 502 for exact strict typographic baseline match with label
-      drawText(numberToWords(form.payment || 0).toUpperCase(), 122, 502, 10);
+      const colStarts = [68, 96, 201, 281, 356, 426, 476];
+      const colWidths = [28, 105, 80, 75, 70, 50, 70];
+      const colCenters = colStarts.map((s, i) => s + colWidths[i] / 2);
+      const headers = ["S.No", "Candidate Name", "Role", "Joining Date", "Actual Salary", "Percentage", "Payment"];
 
-      // -- Account Details --
-      // Label 'Account Details: -' is around Y=530 in our grid
-      const accY = 545; // Start slightly below the label
+      const drawCell = (text, x, w, y, h, align = 'center', isBold = false, fs = dataFs) => {
+        firstPage.drawRectangle({
+          x, y: height - (y + h/2), width: w, height: h,
+          borderColor: rgb(0,0,0), borderWidth: 0.7, color: rgb(1,1,1)
+        });
+        if (text) {
+          if (align === 'center') drawTextCentered(text, x + w/2, y, w-4, isBold, fs);
+          else if (align === 'left') drawText(text, x + 4, y, fs, isBold);
+          else drawTextCentered(text, x + w/2, y, w-4, isBold, fs);
+        }
+      };
+
+      headers.forEach((h, i) => {
+        drawCell(h, colStarts[i], colWidths[i], currentY, rowHR, 'center', true, headerFs);
+      });
+      currentY += (rowHR/2 + rowDR/2);
+
+      let totalPay = 0;
+      cands.forEach((c, i) => {
+        totalPay += (parseFloat(c.payment) || 0);
+        drawCell(String(i+1), colStarts[0], colWidths[0], currentY, rowDR);
+        
+        const nameText = String(c.name || "");
+        firstPage.drawRectangle({
+          x: colStarts[1], y: height - (currentY + rowDR/2), width: colWidths[1], height: rowDR,
+          borderColor: rgb(0,0,0), borderWidth: 0.7, color: rgb(1,1,1)
+        });
+
+        if (nameText.length > 18) {
+           const splitIdx = nameText.lastIndexOf(" ", 18) || 18;
+           const line1 = nameText.substring(0, splitIdx).trim();
+           const line2 = nameText.substring(splitIdx).trim();
+           drawTextCentered(line1, colCenters[1], currentY - 4, colWidths[1]-4, false, dataFs - 1);
+           drawTextCentered(line2, colCenters[1], currentY + 4, colWidths[1]-4, false, dataFs - 1);
+        } else {
+           drawTextCentered(nameText, colCenters[1], currentY, colWidths[1]-4, false, dataFs);
+        }
+
+        drawCell(c.role || "", colStarts[2], colWidths[2], currentY, rowDR);
+        drawCell(c.joiningDate ? getOrdinalDate(c.joiningDate) : "", colStarts[3], colWidths[3], currentY, rowDR);
+        drawCell(Number(c.actualSalary || 0).toLocaleString("en-IN"), colStarts[4], colWidths[4], currentY, rowDR);
+        drawCell(`${c.percentage || 0}%`, colStarts[5], colWidths[5], currentY, rowDR);
+        drawCell(Number(c.payment || 0).toLocaleString("en-IN"), colStarts[6], colWidths[6], currentY, rowDR);
+        currentY += rowDR;
+      });
+
+      const tH = isLargeList ? 24 : 30;
+      firstPage.drawRectangle({
+        x: colStarts[0], y: height - (currentY + tH/2), width: colStarts[6] + colWidths[6] - colStarts[0], height: tH,
+        borderColor: rgb(0,0,0), borderWidth: 0.7, color: rgb(1,1,1)
+      });
+      drawText("Total", colStarts[6] - 45, currentY, 10, true);
+      drawTextCentered(totalPay.toLocaleString("en-IN"), colCenters[6], currentY, colWidths[6]-4, true, 10);
+
+      const footerY = currentY + (isLargeList ? 25 : 40);
+      drawText("In Words : ", 68, footerY, 10, true);
+      drawText(numberToWords(totalPay).toUpperCase(), 125, footerY, isLargeList ? 8.5 : 9.5);
+
+      const accY = footerY + (isLargeList ? 35 : 50);
       if (form.accountType !== "no") {
-        drawText(`Account No. : ${form.accountDetails.accountNumber}`, 75, accY, 10, true);
-        drawText(`Name : ${form.accountDetails.name}`, 75, accY + 15, 10, true);
-        drawText(`Bank : ${form.accountDetails.bank}`, 75, accY + 30, 10, true);
-        drawText(`Branch : ${form.accountDetails.branch}`, 75, accY + 45, 10, true);
-        drawText(`IFSC Code : ${form.accountDetails.ifsc}`, 75, accY + 60, 10, true);
-        drawText(`PAN No. : ${form.accountDetails.pan}`, 75, accY + 75, 10, true);
-        drawText(`GST : ${form.accountDetails.gst}`, 75, accY + 90, 10, true);
+        drawText("Account Details: -", 68, accY - (isLargeList ? 14 : 18), isLargeList ? 10 : 11, true);
+        const details = [
+          `Account No. : ${form.accountDetails.accountNumber}`,
+          `Name : ${form.accountDetails.name}`,
+          `Bank : ${form.accountDetails.bank}`,
+          `Branch : ${form.accountDetails.branch}`,
+          `IFSC Code : ${form.accountDetails.ifsc}`,
+          `PAN No. : ${form.accountDetails.pan}`,
+          `GST : ${form.accountDetails.gst}`
+        ];
+        details.forEach((line, idx) => {
+          drawText(line, 68, accY + (idx * accSpacing), accFs, true);
+        });
       }
 
-      // Strictly removed "Secondary Client Block below Account Details" 
-      // preventing massive overlap with "Authorized Signature" at Y=652
+      // -- Signature Block (Left Aligned) --
+      const sigOffset = form.accountType !== "no" ? (accSpacing * 8) + 15 : 20;
+      const sigY = accY + sigOffset;
+      drawText("Navya S", 68, sigY, 11, true);
+      drawText("Vagarious Solutions Pvt Ltd", 68, sigY + 16, 11, true);
 
       // 4. Save and return blob
       const pdfBytes = await pdfDoc.save();
@@ -483,7 +579,93 @@ const AdminClientInvoice = () => {
                 />
               </div>
 
-              {/* Account Details Dropdown */}
+              <div className="col-span-1 md:col-span-2 lg:col-span-3 flex justify-end items-center gap-3 pt-2">
+                {form.selectedCandidates.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowCandidateList(!showCandidateList)}
+                    className="mr-auto px-4 py-2 border border-blue-200 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-50 mb-3 flex items-center gap-2 shadow-sm transition-all"
+                  >
+                    {showCandidateList ? <EyeSlashIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
+                    {showCandidateList ? "Hide Added List" : `View Added List (${form.selectedCandidates.length})`}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setForm(prev => ({ ...prev, candidateName: "", role: "", joiningDate: "", actualSalary: "", percentage: "", payment: 0 }))}
+                  className="px-4 py-2 border border-gray-300 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-50 mb-3"
+                >
+                  Clear Fields
+                </button>
+                <button
+                  type="button"
+                  onClick={addCandidateToList}
+                  className="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition flex items-center gap-2 mb-3"
+                >
+                  <PlusIcon className="h-4 w-4" />
+                  Add to Invoice List {form.selectedCandidates.length > 0 && `(${form.selectedCandidates.length} added)`}
+                </button>
+              </div>
+
+              {/* --- Selected Candidates Table (UI View) --- */}
+              {form.selectedCandidates.length > 0 && showCandidateList && (
+                <div className="col-span-1 md:col-span-2 lg:col-span-3 mt-4 overflow-hidden border border-blue-100 rounded-xl bg-blue-50/30 animate-in fade-in slide-in-from-top-2 duration-300">
+                  <div className="bg-blue-600 px-4 py-2 flex justify-between items-center text-white">
+                    <h3 className="text-sm font-semibold flex items-center gap-2">
+                       Candidate List ({form.selectedCandidates.length} Selected)
+                    </h3>
+                    <div className="flex items-center gap-2">
+                      <button 
+                        onClick={() => setForm(prev => ({...prev, selectedCandidates: []}))}
+                        className="text-xs bg-white/20 hover:bg-white/30 px-2 py-1 rounded transition"
+                      >
+                        Clear All
+                      </button>
+                      <button 
+                        onClick={() => setShowCandidateList(false)}
+                        className="text-white hover:text-blue-100 p-1"
+                        title="Close List"
+                      >
+                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="6 18L18 6M6 6l12 12" />
+                         </svg>
+                      </button>
+                    </div>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead className="bg-blue-100/50 text-blue-800 font-semibold">
+                        <tr>
+                          <th className="px-4 py-2 border-b">#</th>
+                          <th className="px-4 py-2 border-b">Name</th>
+                          <th className="px-4 py-2 border-b">Role</th>
+                          <th className="px-4 py-2 border-b text-right">Payment</th>
+                          <th className="px-4 py-2 border-b text-center">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-blue-100 bg-white">
+                        {form.selectedCandidates.map((c, idx) => (
+                          <tr key={c.id} className="hover:bg-blue-50/50 transition-colors">
+                            <td className="px-4 py-2 text-gray-500">{idx + 1}</td>
+                            <td className="px-4 py-2 font-medium text-gray-900">{c.name}</td>
+                            <td className="px-4 py-2 text-gray-600">{c.role}</td>
+                            <td className="px-4 py-2 text-right font-bold text-blue-700">₹{c.payment.toLocaleString('en-IN')}</td>
+                            <td className="px-4 py-2 text-center">
+                              <button 
+                                onClick={() => removeCandidateFromList(c.id)}
+                                className="text-red-500 hover:text-red-700 text-xs font-medium underline px-2 py-1"
+                              >
+                                Remove
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
               <div className="col-span-1 md:col-span-2 lg:col-span-3 space-y-4 border-t pt-4 mt-2">
                 <div className="space-y-1">
                   <label className="text-sm font-medium text-gray-700">Account Details</label>
@@ -507,13 +689,13 @@ const AdminClientInvoice = () => {
 
                 {form.accountType === "manual" && (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <input placeholder="Account No." value={form.accountDetails.accountNumber} onChange={(e) => setForm({ ...form, accountDetails: { ...form.accountDetails, accountNumber: e.target.value } })} className={inputCls} />
-                    <input placeholder="Name" value={form.accountDetails.name} onChange={(e) => setForm({ ...form, accountDetails: { ...form.accountDetails, name: e.target.value } })} className={inputCls} />
-                    <input placeholder="Bank" value={form.accountDetails.bank} onChange={(e) => setForm({ ...form, accountDetails: { ...form.accountDetails, bank: e.target.value } })} className={inputCls} />
-                    <input placeholder="Branch" value={form.accountDetails.branch} onChange={(e) => setForm({ ...form, accountDetails: { ...form.accountDetails, branch: e.target.value } })} className={inputCls} />
-                    <input placeholder="IFSC Code" value={form.accountDetails.ifsc} onChange={(e) => setForm({ ...form, accountDetails: { ...form.accountDetails, ifsc: e.target.value } })} className={inputCls} />
-                    <input placeholder="PAN No." value={form.accountDetails.pan} onChange={(e) => setForm({ ...form, accountDetails: { ...form.accountDetails, pan: e.target.value } })} className={inputCls} />
-                    <input placeholder="GST" value={form.accountDetails.gst} onChange={(e) => setForm({ ...form, accountDetails: { ...form.accountDetails, gst: e.target.value } })} className={inputCls} />
+                    <input placeholder="Account No." value={form.accountDetails.accountNumber} onChange={(e) => setForm(prevForm => ({ ...prevForm, accountDetails: { ...prevForm.accountDetails, accountNumber: e.target.value } }))} className={inputCls} />
+                    <input placeholder="Name" value={form.accountDetails.name} onChange={(e) => setForm(prevForm => ({ ...prevForm, accountDetails: { ...prevForm.accountDetails, name: e.target.value } }))} className={inputCls} />
+                    <input placeholder="Bank" value={form.accountDetails.bank} onChange={(e) => setForm(prevForm => ({ ...prevForm, accountDetails: { ...prevForm.accountDetails, bank: e.target.value } }))} className={inputCls} />
+                    <input placeholder="Branch" value={form.accountDetails.branch} onChange={(e) => setForm(prevForm => ({ ...prevForm, accountDetails: { ...prevForm.accountDetails, branch: e.target.value } }))} className={inputCls} />
+                    <input placeholder="IFSC Code" value={form.accountDetails.ifsc} onChange={(e) => setForm(prevForm => ({ ...prevForm, accountDetails: { ...prevForm.accountDetails, ifsc: e.target.value } }))} className={inputCls} />
+                    <input placeholder="PAN No." value={form.accountDetails.pan} onChange={(e) => setForm(prevForm => ({ ...prevForm, accountDetails: { ...prevForm.accountDetails, pan: e.target.value } }))} className={inputCls} />
+                    <input placeholder="GST" value={form.accountDetails.gst} onChange={(e) => setForm(prevForm => ({ ...prevForm, accountDetails: { ...prevForm.accountDetails, gst: e.target.value } }))} className={inputCls} />
                   </div>
                 )}
               </div>
