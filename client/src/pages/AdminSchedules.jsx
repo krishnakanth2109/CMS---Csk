@@ -100,7 +100,7 @@ export default function AdminSchedules() {
         interviewTime: timeStr,
         type: interviewMode,
         round: roundType,
-        status: interviewStatus,
+        status: interviewStatus, // Added Status payload mapping
         duration: 60
       };
 
@@ -266,7 +266,7 @@ export default function AdminSchedules() {
                   </div>
                 </div>
 
-                {/* Status */}
+                {/* Status Dropdown (Matching schema Enum perfectly) */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Status</label>
                   <select
@@ -276,22 +276,26 @@ export default function AdminSchedules() {
                   >
                     <option value="Scheduled">Scheduled</option>
                     <option value="Completed">Completed</option>
-                    <option value="Shortlisted">Shortlisted</option>
-                    <option value="Hold">Hold</option>
-                    <option value="Submitted">Submitted</option>
                     <option value="Cancelled">Cancelled</option>
                     <option value="No Show">No Show</option>
+                    <option value="Shortlisted">Shortlisted</option>
                     <option value="Rejected">Rejected</option>
+                    <option value="Submitted">Submitted</option>
+                    <option value="Hold">Hold</option>
                   </select>
                 </div>
 
-                <button 
-                  onClick={handleSchedule} 
-                  disabled={submitting}
-                  className="w-full flex justify-center items-center bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-medium py-3 rounded-xl shadow-md transition-all mt-4"
-                >
-                  {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : "Confirm Schedule"}
-                </button>
+                {/* Submit Button inside the main form container */}
+                <div className="pt-2">
+                  <button 
+                    onClick={handleSchedule} 
+                    disabled={submitting}
+                    className="w-full flex justify-center items-center bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-medium py-3 rounded-xl shadow-md transition-all"
+                  >
+                    {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : "Confirm Schedule"}
+                  </button>
+                </div>
+
               </div>
             </div>
           </div>

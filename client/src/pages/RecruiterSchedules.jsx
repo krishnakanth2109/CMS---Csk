@@ -4,9 +4,9 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Calendar, Clock, MapPin, Video, Phone, Building, Search,
-  Calendar as CalendarIcon, List, Grid, Eye, Plus, Download,
+  Calendar as CalendarIcon, List, Grid, Eye, Plus,
   CheckCircle2, AlertCircle, X, Loader2, Mail, Briefcase,
-  DollarSign, GraduationCap, FileText, UserCircle, Target, Users, Zap, Edit, Pencil, Trash2
+  FileText, UserCircle, Target, Users, Zap, Edit, Pencil, Trash2
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "@/hooks/use-toast";
@@ -20,7 +20,6 @@ function getStatusBadge(status) {
   
   if (!status) return <span className={`${base} bg-gray-100 text-gray-800`}><Calendar className="h-3 w-3" />Unknown</span>;
 
-  // Round Badges
   if (status.includes("L1")) return <span className={`${base} bg-blue-100 text-blue-800 border border-blue-200`}><Zap className="h-3 w-3" />{status}</span>;
   if (status.includes("L2")) return <span className={`${base} bg-indigo-100 text-indigo-800 border border-indigo-200`}><Target className="h-3 w-3" />{status}</span>;
   if (status.includes("L3")) return <span className={`${base} bg-purple-100 text-purple-800 border border-purple-200`}><Target className="h-3 w-3" />{status}</span>;
@@ -28,7 +27,6 @@ function getStatusBadge(status) {
   if (status.includes("HR")) return <span className={`${base} bg-orange-100 text-orange-800 border border-orange-200`}><Users className="h-3 w-3" />{status}</span>;
   if (status.includes("Technical")) return <span className={`${base} bg-cyan-100 text-cyan-800 border border-cyan-200`}><Briefcase className="h-3 w-3" />{status}</span>;
 
-  // Status Badges
   if (status === 'Shortlisted' || status === 'Completed') return <span className={`${base} bg-green-100 text-green-800 border border-green-200`}><CheckCircle2 className="h-3 w-3" />{status}</span>;
   if (status === 'Rejected' || status === 'Cancelled' || status === 'No Show') return <span className={`${base} bg-red-100 text-red-800 border border-red-200`}><X className="h-3 w-3" />{status}</span>;
   if (status === 'Hold') return <span className={`${base} bg-yellow-100 text-yellow-800 border border-yellow-200`}><AlertCircle className="h-3 w-3" />{status}</span>;
@@ -78,7 +76,7 @@ export default function RecruiterSchedules() {
   const [loading, setLoading] = useState(true);
 
   const [selectedInterview, setSelectedInterview] = useState(null);
-  const [editInterviewData, setEditInterviewData] = useState(null); // Full Edit State
+  const [editInterviewData, setEditInterviewData] = useState(null); 
   const [selectedCandidateFullDetails, setSelectedCandidateFullDetails] = useState(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
 
@@ -90,7 +88,6 @@ export default function RecruiterSchedules() {
   const [activeStatFilter, setActiveStatFilter] = useState(null);
   const [showNewInterviewForm, setShowNewInterviewForm] = useState(false);
 
-  // FETCH RECRUITER FROM SESSION STORAGE
   const storedUser = JSON.parse(sessionStorage.getItem('user') || '{}');
   const sessionRecruiterId = storedUser?._id || storedUser?.id || "";
   const sessionRecruiterName = storedUser?.firstName ? `${storedUser.firstName} ${storedUser.lastName || ''}` : (storedUser?.name || "");
@@ -142,7 +139,7 @@ export default function RecruiterSchedules() {
             rawRound: item.round,
             status: item.status !== 'Scheduled' ? item.status : (item.round || "Scheduled"),
             interviewDate: item.interviewDate, 
-            interviewType: item.type,
+            interviewType: item.type || 'Virtual',
             recruiterId: item.recruiterId?._id || item.recruiterId, 
             recruiterName: rName,
             clientName: item.jobId?.clientName || "N/A",
@@ -212,22 +209,34 @@ export default function RecruiterSchedules() {
 
   const validateForm = () => {
     const errors = {};
-    if (!newInterviewForm.candidateId) errors.candidateName = "Please select a candidate first.";
-    if (!newInterviewForm.recruiterId) errors.recruiterId = "Please select a recruiter.";
     
-    const today = new Date(); 
-    today.setHours(0,0,0,0); 
-    const datePart = new Date(newInterviewForm.interviewDate);
-    if (datePart < today) errors.interviewDate = "Date cannot be in the past.";
+    // Validate Candidate Selection
+    if (!newInterviewForm.candidateId) {
+      errors.candidateId = "Please select a candidate first.";
+    }
+
+    // Validate Date (Ensure it ignores timezones making 'today' look like 'yesterday')
+    if (newInterviewForm.interviewDate) {
+      const today = new Date(); 
+      today.setHours(0,0,0,0); 
+      const [year, month, day] = newInterviewForm.interviewDate.split('-');
+      const datePart = new Date(year, month - 1, day);
+      
+      if (datePart < today) {
+        errors.interviewDate = "Date cannot be in the past.";
+      }
+    } else {
+      errors.interviewDate = "Date is required.";
+    }
     
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
-  // ✅ THIS FUNCTION WAS MISSING IN THE LAST VERSION
   const handleNewInterviewChange = (e) => {
     const { name, value } = e.target;
     setNewInterviewForm(prev => ({ ...prev, [name]: value }));
+    // Clear error for the field being typed in
     if (formErrors[name]) setFormErrors(prev => ({ ...prev, [name]: '' }));
   };
 
@@ -247,7 +256,7 @@ export default function RecruiterSchedules() {
         candidatePhone: candidate.contact || candidate.phone || "",
         position: candidate.position || ""
       }));
-      setFormErrors({});
+      setFormErrors(prev => ({ ...prev, candidateId: '' })); // Clear error
     }
   };
 
@@ -299,7 +308,6 @@ export default function RecruiterSchedules() {
         toast({ title: "Updated", description: "Interview updated successfully." });
         fetchData();
         setEditInterviewData(null);
-        // Optimistic update if view modal is open
         if (selectedInterview && selectedInterview.id === id) {
           setSelectedInterview(prev => ({ 
             ...prev, 
@@ -512,6 +520,7 @@ function EditInterviewModal({ interview, onClose, onSave }) {
   const [form, setForm] = useState({
     round: interview.rawRound || 'L1 Interview',
     status: interview.rawStatus || 'Scheduled',
+    type: interview.interviewType || 'Virtual',
     interviewDate: new Date(interview.interviewDate).toISOString().split('T')[0],
     interviewTime: new Date(interview.interviewDate).toTimeString().substring(0, 5),
     meetingLink: interview.meetingLink || '',
@@ -577,6 +586,15 @@ function EditInterviewModal({ interview, onClose, onSave }) {
           </div>
 
           <div>
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">Mode</label>
+            <select name="type" value={form.type} onChange={handleChange} className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-white">
+              <option value="Virtual">Virtual</option>
+              <option value="In-person">In-person</option>
+              <option value="Phone">Phone</option>
+            </select>
+          </div>
+
+          <div>
             <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">Meeting Link</label>
             <input type="text" name="meetingLink" value={form.meetingLink} onChange={handleChange} className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-white" />
           </div>
@@ -623,9 +641,13 @@ function InterviewDetailModal({ interview, candidateFull, loading, onClose, onUp
                 {interview.candidateName}
                 {getStatusBadge(interview.status)}
               </h2>
-              <div className="flex gap-2 text-blue-100 items-center mt-1">
+              <div className="flex gap-2 text-blue-100 items-center mt-1 text-sm font-medium">
                 <Briefcase className="h-4 w-4" />
                 <span>{interview.position} at {interview.clientName}</span>
+                <span className="mx-2 opacity-50">•</span>
+                <Badge variant="secondary" className="bg-white/20 hover:bg-white/30 text-white border-0">
+                  {interview.interviewType}
+                </Badge>
               </div>
             </div>
           </div>
@@ -717,8 +739,12 @@ function InterviewDetailModal({ interview, candidateFull, loading, onClose, onUp
 
                 <div className="rounded-xl border-l-4 border-l-blue-500 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm p-4 grid grid-cols-1 gap-4">
                   <div className="space-y-1">
-                    <p className="text-xs text-gray-500 dark:text-gray-400 uppercase">Interview Date</p>
-                    <p className="font-medium flex items-center gap-2 text-gray-900 dark:text-white"><Calendar className="h-4 w-4 text-blue-600" /> {new Date(interview.interviewDate).toLocaleString()}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 uppercase">Interview Date & Mode</p>
+                    <p className="font-medium flex items-center gap-2 text-gray-900 dark:text-white">
+                      <Calendar className="h-4 w-4 text-blue-600" /> {new Date(interview.interviewDate).toLocaleString()}
+                      <span className="text-gray-400 px-2">•</span>
+                      <span className="text-sm font-semibold">{interview.interviewType}</span>
+                    </p>
                   </div>
                   <div>
                     <p className="text-xs text-gray-500 dark:text-gray-400 uppercase mb-1">Meeting Link</p>
@@ -777,21 +803,20 @@ function NewInterviewModal({ form, errors, onChange, onCandidateSelect, onGenera
         <div className="p-6 space-y-4">
           <div>
             <label className="text-sm font-medium block mb-1 text-gray-700 dark:text-gray-200">Select Candidate *</label>
-            <select className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-white" onChange={onCandidateSelect} value={form.candidateId}>
+            <select className={inputCls(errors.candidateId)} onChange={onCandidateSelect} value={form.candidateId}>
               <option value="">-- Choose a Candidate --</option>
               {candidates.map((c) => <option key={c._id || c.id} value={c._id || c.id}>{c.name || "Unknown"} ({c.email || "No Email"})</option>)}
             </select>
+            {errors.candidateId && <p className="text-xs text-red-500 mt-1">{errors.candidateId}</p>}
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-sm font-medium block mb-1 text-gray-700 dark:text-gray-200">Candidate Name</label>
-              <input name="candidateName" value={form.candidateName} onChange={onChange} disabled={!!form.candidateId} className={inputCls(errors.candidateName) + (form.candidateId ? " opacity-70 cursor-not-allowed" : "")} />
-              {errors.candidateName && <p className="text-xs text-red-500 mt-1">{errors.candidateName}</p>}
+              <input name="candidateName" value={form.candidateName} onChange={onChange} disabled={!!form.candidateId} className={inputCls(false) + (form.candidateId ? " opacity-70 cursor-not-allowed" : "")} />
             </div>
             <div>
               <label className="text-sm font-medium block mb-1 text-gray-700 dark:text-gray-200">Email</label>
-              <input name="candidateEmail" value={form.candidateEmail} onChange={onChange} disabled={!!form.candidateId} className={inputCls(errors.candidateEmail) + (form.candidateId ? " opacity-70 cursor-not-allowed" : "")} />
-              {errors.candidateEmail && <p className="text-xs text-red-500 mt-1">{errors.candidateEmail}</p>}
+              <input name="candidateEmail" value={form.candidateEmail} onChange={onChange} disabled={!!form.candidateId} className={inputCls(false) + (form.candidateId ? " opacity-70 cursor-not-allowed" : "")} />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
