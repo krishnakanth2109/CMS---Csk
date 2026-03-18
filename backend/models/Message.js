@@ -13,5 +13,10 @@ const messageSchema = mongoose.Schema({
   timestamps: true // automatically adds createdAt
 });
 
+// ── Indexes for fast queries ──────────────────────────────────────────────────
+messageSchema.index({ to: 1, createdAt: -1 });   // inbox queries (most common)
+messageSchema.index({ from: 1, createdAt: -1 }); // sent queries
+messageSchema.index({ createdAt: -1 });           // default sort
+
 const Message = mongoose.model('Message', messageSchema);
 export default Message;

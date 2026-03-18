@@ -67,5 +67,11 @@ interviewSchema.pre('save', function (next) {
   next();
 });
 
+// ── Indexes for fast queries ──────────────────────────────────────────────────
+interviewSchema.index({ recruiterId: 1, interviewDate: 1 }); // recruiter's interviews sorted by date
+interviewSchema.index({ candidateId: 1 });                    // lookup interviews by candidate
+interviewSchema.index({ interviewDate: 1 });                  // date-based sorts/filters
+interviewSchema.index({ status: 1 });                         // status filter
+
 const Interview = mongoose.model('Interview', interviewSchema);
 export default Interview;

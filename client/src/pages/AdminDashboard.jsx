@@ -41,7 +41,7 @@ async function apiFetch(path) {
 const PrimaryStatCard = ({ title, value, trend, icon: Icon, onClick }) => (
   <div 
     onClick={onClick}
-    className="relative overflow-hidden bg-[#3530a0] rounded-[1.5rem] p-6 text-white shadow-lg h-44 flex flex-col justify-between cursor-pointer hover:shadow-2xl transition-all hover:scale-[1.02]"
+    className="relative overflow-hidden bg-[#3530a0] rounded-[1.5rem] p-6 text-white shadow-lg h-44 flex flex-col justify-between cursor-pointer"
   >
     <div className="relative z-10 flex justify-between items-start">
       <div>
@@ -80,7 +80,7 @@ const BubbleStatCard = ({ title, value, trend, icon: Icon, theme = 'blue', onCli
   return (
     <div 
       onClick={onClick}
-      className="relative bg-white rounded-[1.5rem] p-6 shadow-sm border border-gray-100 h-44 flex flex-col justify-between cursor-pointer hover:shadow-lg transition-all hover:scale-[1.02] overflow-hidden"
+      className="relative bg-white rounded-[1.5rem] p-6 shadow-sm border border-gray-100 h-44 flex flex-col justify-between cursor-pointer overflow-hidden"
     >
       <div className={clsx("absolute -top-6 -left-6 w-36 h-36 rounded-full opacity-100 pointer-events-none", t.bubble)}></div>
       <div className="relative z-10 flex justify-between items-start">
@@ -130,24 +130,29 @@ export default function AdminDashboard() {
 
   const RECRUITER_NAMES = ['All', 'Varun', 'Lahithya', 'Akhila', 'Hema', 'Nainika'];
 
-  // Initial Data Fetch
+  // Initial Data Fetch — fetch only what the dashboard actually needs
+  // candidates for stats/table, recruiters for table, jobs+clients count only
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [candR, recR, intR, clientR, jobsR] = await Promise.allSettled([
-          apiFetch('/candidates'), apiFetch('/recruiters'), apiFetch('/interviews'), apiFetch('/clients'), apiFetch('/jobs')
+        // Fetch candidates and recruiters in parallel (needed for stats + table)
+        // Jobs and clients only need counts — fetch them lightweight
+        const [candR, recR, jobsR, clientR] = await Promise.allSettled([
+          apiFetch('/candidates'),
+          apiFetch('/recruiters'),
+          apiFetch('/jobs'),
+          apiFetch('/clients'),
         ]);
-        if (candR.status === 'fulfilled') setCandidates(candR.value);
-        if (recR.status === 'fulfilled') setRecruiters(recR.value);
-        if (intR.status === 'fulfilled') setInterviews(intR.value);
+        if (candR.status   === 'fulfilled') setCandidates(candR.value);
+        if (recR.status    === 'fulfilled') setRecruiters(recR.value);
+        if (jobsR.status   === 'fulfilled') setJobs(jobsR.value);
         if (clientR.status === 'fulfilled') setClients(clientR.value);
-        if (jobsR.status === 'fulfilled') setJobs(jobsR.value);
       } catch (err) {
         toast({ title: 'Sync Error', description: 'Check server connection', variant: 'destructive' });
       } finally { setLoading(false); }
     };
     fetchData();
-  }, [toast]);
+  }, []);
 
   // Fetch specific date data when modal is open or date changes
   useEffect(() => {
@@ -258,7 +263,6 @@ export default function AdminDashboard() {
         <div className="flex items-center gap-2 text-xs font-bold text-gray-500 bg-white px-4 py-2 rounded-lg shadow-sm">
           <span>{formattedDate}</span>
           <span className="relative flex h-3 w-3">
-             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
              <span className="relative inline-flex rounded-full h-3 w-3 bg-purple-500"></span>
           </span>
         </div>
@@ -403,7 +407,7 @@ export default function AdminDashboard() {
           <h3 className="text-base font-bold text-slate-800">Recruiter Performance Details</h3>
           <button 
             onClick={() => navigate('/admin/recruiters')} 
-            className="bg-[#283086] text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wide hover:bg-blue-900 transition-colors shadow-lg"
+            className="bg-[#283086] text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wide hover:bg-blue-900 shadow-lg"
           >
             View All Recruiters
           </button>
@@ -423,7 +427,7 @@ export default function AdminDashboard() {
             </thead>
             <tbody className="divide-y divide-gray-50 bg-white">
               {recruiterStats.map((r, i) => (
-                <tr key={i} className="hover:bg-blue-50/30 transition-colors">
+                <tr key={i} className="hover:bg-blue-50/30">
                   <td className="px-8 py-5 font-bold text-slate-700">{r.fullName}</td>
                   <td className="px-4 py-5 text-center text-blue-600 font-black">{r.submissions}</td>
                   <td className="px-4 py-5 text-center text-orange-400 font-bold">{r.hold}</td>
@@ -443,8 +447,8 @@ export default function AdminDashboard() {
 
       {/* ── MODAL: DAY SUBMISSIONS ── */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[85vh] flex flex-col overflow-hidden">
             
             {/* Modal Header */}
             <div className="px-6 py-4 border-b border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4 bg-[#f8faff]">
@@ -486,7 +490,7 @@ export default function AdminDashboard() {
                 {/* Close Button */}
                 <button 
                   onClick={() => setIsModalOpen(false)}
-                  className="p-2 bg-gray-100 hover:bg-red-50 hover:text-red-500 rounded-full transition-colors"
+                  className="p-2 bg-gray-100 hover:bg-red-50 hover:text-red-500 rounded-full"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -533,7 +537,7 @@ export default function AdminDashboard() {
                       const cStatus = Array.isArray(c.status) ? c.status[0] : c.status;
 
                       return (
-                        <tr key={c._id} className="hover:bg-purple-50/30 transition-colors">
+                        <tr key={c._id} className="hover:bg-purple-50/30">
                           <td className="px-6 py-4 font-bold text-[#283086]">{c.candidateId || 'N/A'}</td>
                           <td className="px-6 py-4 font-semibold text-slate-800">{c.name || `${c.firstName} ${c.lastName}`}</td>
                           <td className="px-6 py-4 font-medium text-gray-600">{recruiterName}</td>

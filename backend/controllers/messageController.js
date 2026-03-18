@@ -1,21 +1,32 @@
 import Message from '../models/Message.js';
 import User from '../models/User.js';
 
-// Helper: resolve a display name (firstName + lastName) from id or keyword
-const resolveName = async (value) => {
-  if (!value) return 'Unknown';
-  if (value === 'admin') return 'Admin';
-  if (value === 'all')   return 'Everyone';
+// Batch resolve display names for a list of from/to values
+// Instead of 1 DB query per message (N+1), do 1 query total
+const batchResolveNames = async (values) => {
+  const unique = [...new Set(values.filter(Boolean))];
+  const objectIds = unique.filter(v => /^[a-f\d]{24}$/i.test(v));
 
-  // Valid MongoDB ObjectId (24 hex chars)
-  if (/^[a-f\d]{24}$/i.test(value)) {
-    const user = await User.findById(value).select('firstName lastName username role');
-    if (user) {
-      const full = [user.firstName, user.lastName].filter(Boolean).join(' ');
-      return full || user.username || 'User';
-    }
-  }
-  return value; // fallback
+  const users = objectIds.length
+    ? await User.find({ _id: { $in: objectIds } })
+        .select('_id firstName lastName username')
+        .lean()
+    : [];
+
+  const userMap = {};
+  users.forEach(u => {
+    const full = [u.firstName, u.lastName].filter(Boolean).join(' ');
+    userMap[String(u._id)] = full || u.username || 'User';
+  });
+
+  const resolve = (v) => {
+    if (!v) return 'Unknown';
+    if (v === 'admin') return 'Admin';
+    if (v === 'all')   return 'Everyone';
+    return userMap[v] || v;
+  };
+
+  return resolve;
 };
 
 // @desc    Get messages for a user (Admin, Manager, or Recruiter)
@@ -47,15 +58,17 @@ export const getMessages = async (req, res) => {
       };
     }
 
-    const messages = await Message.find(query).sort({ createdAt: -1 });
+    const messages = await Message.find(query).sort({ createdAt: -1 }).lean();
 
-    const enhancedMessages = await Promise.all(
-      messages.map(async (msg) => {
-        const fromName = await resolveName(msg.from);
-        const toName   = await resolveName(msg.to);
-        return { ...msg.toObject(), fromName, toName };
-      })
-    );
+    // Batch resolve all from/to names in ONE query instead of N queries
+    const allValues = messages.flatMap(m => [m.from, m.to]);
+    const resolve = await batchResolveNames(allValues);
+
+    const enhancedMessages = messages.map(msg => ({
+      ...msg,
+      fromName: resolve(msg.from),
+      toName:   resolve(msg.to),
+    }));
 
     res.json(enhancedMessages);
   } catch (error) {
@@ -75,10 +88,8 @@ export const sendMessage = async (req, res) => {
 
     const message = await Message.create({ from, to, subject, content });
 
-    const fromName = await resolveName(from);
-    const toName   = await resolveName(to);
-
-    res.status(201).json({ ...message.toObject(), fromName, toName });
+    const resolve = await batchResolveNames([from, to]);
+    res.status(201).json({ ...message.toObject(), fromName: resolve(from), toName: resolve(to) });
   } catch (error) {
     res.status(400).json({ message: error.message });
   }

@@ -95,4 +95,8 @@ const userSchema = new mongoose.Schema(
 
 const User = mongoose.model('User', userSchema);
 
+// ── Indexes for fast queries ──────────────────────────────────────────────────
+userSchema.index({ role: 1, active: 1 });  // getRecruiters filter (most used)
+userSchema.index({ firebaseUid: 1 });      // auth middleware lookup on every request
+
 export default User;

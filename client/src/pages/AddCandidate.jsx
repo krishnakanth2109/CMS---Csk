@@ -51,7 +51,7 @@ const StatCard = ({ title, value, colorTheme, active, onClick, hasDot }) => {
   const themeClass = themes[colorTheme] || themes.overall;
 
   return (
-    <div onClick={onClick} className={`relative p-4 rounded-xl shadow-sm border transition-all ${themeClass} ${onClick ? 'cursor-pointer hover:shadow-md hover:-translate-y-0.5' : ''} ${active ? 'ring-2 ring-offset-2 ring-slate-400 dark:ring-slate-500' : ''}`}>
+    <div onClick={onClick} className={`relative p-4 rounded-xl shadow-sm border ${themeClass} ${onClick ? 'cursor-pointer' : ''} ${active ? 'ring-2 ring-offset-2 ring-slate-400 dark:ring-slate-500' : ''}`}>
       {hasDot && <span className="absolute top-3 right-3 h-2 w-2 rounded-full bg-white opacity-80"></span>}
       <h3 className="text-2xl font-bold">{value}</h3>
       <p className="text-sm mt-1 font-medium opacity-90">{title}</p>
@@ -550,11 +550,13 @@ export default function AdminCandidates() {
         setCandidates(prev =>
           prev.map(c => c._id === selectedCandidateId ? { ...c, ...savedCandidate } : c)
         );
+      } else {
+        // Prepend new candidate to top of list — no full refetch needed
+        setCandidates(prev => [savedCandidate, ...prev]);
       }
 
       toast({ title: 'Success', description: `Candidate ${isEditMode ? 'updated' : 'added'}` });
       setIsDialogOpen(false);
-      fetchData(); 
     } catch (err) {
       const msg = err.message || '';
       if (msg.toLowerCase().includes('email') || msg.toLowerCase().includes('duplicate') || msg.toLowerCase().includes('e11000')) {
@@ -573,7 +575,7 @@ export default function AdminCandidates() {
     try {
       await fetch(`${API_URL}/candidates/${id}`, { method: 'DELETE', headers: getAuthHeader() });
       toast({ title: 'Deleted', description: 'Candidate removed' });
-      fetchData();
+      setCandidates(prev => prev.filter(c => c._id !== id));
     } catch (err) {
       toast({ title: 'Error', description: 'Delete failed', variant: 'destructive' });
     }
@@ -783,9 +785,17 @@ export default function AdminCandidates() {
       const data = await res.json();
 
       toast({ title: 'Success', description: data.message || `Successfully assigned ${selectedIds.length} candidates` });
+      // Update recruiterId in local state for all reassigned candidates
+      setRecruiters(prev => {
+        const rec = prev.find(r => (r._id || r.id) === bulkRecruiterId);
+        if (!rec) return prev;
+        return prev;
+      });
+      setCandidates(prev => prev.map(c =>
+        selectedIds.includes(c._id) ? { ...c, recruiterId: bulkRecruiterId } : c
+      ));
       setSelectedIds([]);
       setBulkRecruiterId('');
-      fetchData();
     } catch (err) {
       toast({ title: 'Error', description: 'Failed to assign candidates', variant: 'destructive' });
     } finally {

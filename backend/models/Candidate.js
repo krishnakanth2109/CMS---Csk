@@ -69,6 +69,14 @@ const candidateSchema = mongoose.Schema({
   timestamps: true,
 });
 
+// ── Indexes for fast queries ──────────────────────────────────────────────────
+candidateSchema.index({ recruiterId: 1, createdAt: -1 }); // recruiter candidate list (most used)
+candidateSchema.index({ createdAt: -1 });                  // admin all-candidates sorted newest
+candidateSchema.index({ status: 1 });                      // status filter
+candidateSchema.index({ email: 1 });                       // duplicate email check
+candidateSchema.index({ contact: 1 });                     // duplicate phone check
+candidateSchema.index({ candidateId: 1 });                 // ID lookup
+
 // Minimal counter schema (stored in 'counters' collection)
 const counterSchema = new mongoose.Schema({
   _id:  { type: String, required: true },
@@ -89,30 +97,29 @@ candidateSchema.pre('save', async function (next) {
   if (!this.isNew || this.candidateId) return next();
 
   try {
-    // 1. Auto-healing step: Sync the counter with the highest existing ID
+    // 1. Auto-healing step: Sync the counter with the highest existing CAND- ID
+    //    If no candidates exist (DB cleared), this resets the counter to 0
     if (!isCounterSynced) {
-      // Find the currently highest candidateId starting with "VTS"
       const highestCandidate = await this.constructor
-        .findOne({ candidateId: { $regex: /^VTS/ } }, { candidateId: 1 })
+        .findOne({ candidateId: { $regex: /^CAND-/ } }, { candidateId: 1 })
         .sort({ candidateId: -1 });
 
       let maxSeq = 0;
       if (highestCandidate && highestCandidate.candidateId) {
-        // Extract the number part: "VTS0000044" -> 44
-        const match = highestCandidate.candidateId.match(/^VTS0*(\d+)$/);
+        const match = highestCandidate.candidateId.match(/^CAND-0*(\d+)$/);
         if (match) {
           maxSeq = parseInt(match[1], 10);
         }
       }
 
-      // $max atomically sets the counter to maxSeq ONLY if maxSeq is greater than the current seq
-      await Counter.updateOne(
+      // Reset counter to maxSeq (0 if DB is empty — starts fresh from CAND-0000001)
+      await Counter.findOneAndUpdate(
         { _id: 'candidate' },
-        { $max: { seq: maxSeq } },
-        { upsert: true }
+        { $set: { seq: maxSeq } },  // $set instead of $max — forces reset to 0 when DB is cleared
+        { upsert: true, new: true }
       );
 
-      isCounterSynced = true; // Don't run this check again while the server stays alive
+      isCounterSynced = true;
     }
 
     // 2. Atomic increment — guaranteed unique, race-condition-proof
@@ -122,7 +129,7 @@ candidateSchema.pre('save', async function (next) {
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
 
-    this.candidateId = `VTS${counter.seq.toString().padStart(7, '0')}`;
+    this.candidateId = `CAND-${counter.seq.toString().padStart(7, '0')}`;
     next();
   } catch (error) {
     console.error('Error generating Candidate ID:', error);

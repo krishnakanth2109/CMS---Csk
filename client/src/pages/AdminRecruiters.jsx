@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -113,20 +113,12 @@ export default function AdminRecruiters() {
         fetch(`${API_URL}/candidates`, { headers }),
       ]);
 
-      if (!rr.ok) {
-        const e = await rr.json().catch(() => ({}));
-        throw new Error(e.message || 'Failed to fetch users');
-      }
-      if (!rc.ok) {
-        const e = await rc.json().catch(() => ({}));
-        throw new Error(e.message || 'Failed to fetch candidates');
-      }
+      if (!rr.ok) { const e = await rr.json().catch(() => ({})); throw new Error(e.message || 'Failed to fetch users'); }
+      if (!rc.ok) { const e = await rc.json().catch(() => ({})); throw new Error(e.message || 'Failed to fetch candidates'); }
 
       const recruiterData = await rr.json();
       const candidateData = await rc.json();
 
-      // ✅ FIX: Only show 'recruiter' and 'admin' roles on this page.
-      // Managers are excluded — they are not shown in the Recruiters list.
       const allUsers = recruiterData
         .filter((user) => ['recruiter', 'admin'].includes(user.role))
         .map((r) => ({ ...r, id: r._id }));
@@ -224,10 +216,11 @@ export default function AdminRecruiters() {
 
       const addedName = `${newRecruiter.firstName} ${newRecruiter.lastName}`;
       const addedRole = newRecruiter.role;
+      // Update local state directly — no full refetch needed
+      setRecruiters(prev => [...prev, { ...data, id: data._id }]);
       setShowModal(false);
       setNewRecruiter(EMPTY_RECRUITER);
       setErrors({});
-      fetchData();
       showSuccess(`✅ ${addedName} has been added successfully as ${addedRole}.`);
     } catch (error) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -250,9 +243,10 @@ export default function AdminRecruiters() {
       if (!res.ok) throw new Error(data.message || 'Failed to update user');
 
       const editedName = `${editRecruiter.firstName} ${editRecruiter.lastName}`;
+      // Update local state directly
+      setRecruiters(prev => prev.map(r => r.id === editRecruiter.id ? { ...r, ...data, id: data._id || r.id } : r));
       setShowEditModal(false);
       setErrors({});
-      fetchData();
       showSuccess(`✅ ${editedName}'s profile has been updated successfully.`);
     } catch (error) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -269,9 +263,10 @@ export default function AdminRecruiters() {
       if (!res.ok) throw new Error('Failed to delete user');
 
       const deletedName = `${recruiterToDelete.firstName} ${recruiterToDelete.lastName}`;
+      // Remove from local state directly
+      setRecruiters(prev => prev.filter(r => r.id !== recruiterToDelete.id));
       setShowDeleteModal(false);
       setRecruiterToDelete(null);
-      fetchData();
       showSuccess(`🗑️ ${deletedName} has been permanently deleted.`);
     } catch (error) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -288,9 +283,10 @@ export default function AdminRecruiters() {
       });
       if (!res.ok) throw new Error('Failed to update status');
       const toggledName = `${recruiterToToggle.firstName} ${recruiterToToggle.lastName}`;
+      // Toggle active in local state directly
+      setRecruiters(prev => prev.map(r => r.id === recruiterToToggle.id ? { ...r, active: !wasActive } : r));
       setShowDeactivateModal(false);
       setRecruiterToToggle(null);
-      fetchData();
       showSuccess(wasActive
         ? `🔴 ${toggledName} has been deactivated.`
         : `🟢 ${toggledName} has been activated.`);
@@ -324,28 +320,30 @@ export default function AdminRecruiters() {
     reader.readAsDataURL(file);
   };
 
-  // ── Stats helper ──────────────────────────────────────────────────────────
-  const calcStats = (recruiterId) => {
-    const rc = candidates.filter((c) => {
+  // ── Pre-computed stats map — runs ONCE when candidates change, not on every sort ──
+  // Old calcStats was called inside .sort() = O(n²) candidate scans per render
+  const statsMap = useMemo(() => {
+    const map = {};
+    candidates.forEach(c => {
       const rid = typeof c.recruiterId === 'object' ? c.recruiterId?._id : c.recruiterId;
-      return rid === recruiterId;
-    });
-    const hasStatus = (s) => rc.filter((c) => {
+      if (!rid) return;
+      if (!map[rid]) map[rid] = { total: 0, joined: 0, selected: 0, rejected: 0, turnups: 0, noShow: 0 };
       const sa = Array.isArray(c.status) ? c.status : [c.status || ''];
-      return sa.includes(s);
-    }).length;
+      map[rid].total++;
+      if (sa.includes('Joined'))   map[rid].joined++;
+      if (sa.includes('Selected')) map[rid].selected++;
+      if (sa.includes('Rejected')) map[rid].rejected++;
+      if (sa.includes('Turnups'))  map[rid].turnups++;
+      if (sa.includes('No Show'))  map[rid].noShow++;
+    });
+    return map;
+  }, [candidates]);
 
-    return {
-      total:    rc.length,
-      joined:   hasStatus('Joined'),
-      selected: hasStatus('Selected'),
-      rejected: hasStatus('Rejected'),
-      turnups:  hasStatus('Turnups'),
-      noShow:   hasStatus('No Show'),
-    };
-  };
+  const calcStats = useCallback((recruiterId) => {
+    return statsMap[recruiterId] || { total: 0, joined: 0, selected: 0, rejected: 0, turnups: 0, noShow: 0 };
+  }, [statsMap]);
 
-  // ── Sort / Filter ─────────────────────────────────────────────────────────
+  // ── Sort / Filter — memoized so it only recalculates when deps change ────────
   const toggleSort = (field) => {
     if (sortField === field) setSortOrder((o) => o === 'asc' ? 'desc' : 'asc');
     else { setSortField(field); setSortOrder('asc'); }
@@ -356,7 +354,7 @@ export default function AdminRecruiters() {
       ? <ArrowUpDown className="h-3 w-3 ml-1 opacity-50" />
       : <span className="ml-1 text-blue-500">{sortOrder === 'asc' ? '↑' : '↓'}</span>;
 
-  const filteredRecruiters = recruiters
+  const filteredRecruiters = useMemo(() => recruiters
     .filter((r) => {
       const q        = searchTerm.toLowerCase();
       const fullName = `${r.firstName || ''} ${r.lastName || ''}`.toLowerCase();
@@ -379,10 +377,10 @@ export default function AdminRecruiters() {
         default: break;
       }
       return (av > bv ? 1 : -1) * (sortOrder === 'asc' ? 1 : -1);
-    });
+    }), [recruiters, searchTerm, sortField, sortOrder, calcStats]);
 
-  // ── Candidate modal filter ─────────────────────────────────────────────────
-  const filteredCandidatesForModal = () => {
+  // ── Candidate modal filter — memoized, not recalculated on every render ──────
+  const filteredCandidatesForModal = useMemo(() => {
     if (!selectedRecruiter) return [];
     let list = candidates.filter((c) => {
       const rid = typeof c.recruiterId === 'object' ? c.recruiterId?._id : c.recruiterId;
@@ -392,7 +390,7 @@ export default function AdminRecruiters() {
     if (candidateFilterType === 'selected') list = list.filter((c) => (Array.isArray(c.status) ? c.status : [c.status]).includes('Selected'));
     if (candidateFilterType === 'rejected') list = list.filter((c) => (Array.isArray(c.status) ? c.status : [c.status]).includes('Rejected'));
     return list;
-  };
+  }, [candidates, selectedRecruiter, candidateFilterType]);
 
   // ── Summary stats ─────────────────────────────────────────────────────────
   // isActive: true when active===true OR active===undefined/null (legacy docs)
@@ -1233,8 +1231,8 @@ export default function AdminRecruiters() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredCandidatesForModal().length > 0
-                      ? filteredCandidatesForModal().map((c, i) => (
+                    {filteredCandidatesForModal.length > 0
+                      ? filteredCandidatesForModal.map((c, i) => (
                         <tr key={i} className="border-b hover:bg-gray-50 dark:hover:bg-gray-800">
                           <td className="p-3 font-medium">{c.name}</td>
                           <td className="p-3">

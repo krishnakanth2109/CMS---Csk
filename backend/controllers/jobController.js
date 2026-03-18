@@ -27,7 +27,7 @@ export const getJobs = async (req, res) => {
     }
     // ────────────────────────────────────────────────────────────────
 
-    const jobs = await Job.find(query).sort({ createdAt: -1 });
+    const jobs = await Job.find(query).sort({ createdAt: -1 }).lean();
     res.json(jobs);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -48,18 +48,16 @@ export const createJob = async (req, res) => {
       jobData.tatTime = null;
     }
 
-    // --- AUTO-GENERATE JOB CODE (REQ0001 format) ---
-    const allReqJobs = await Job.find({ jobCode: /^REQ\d+$/ }, 'jobCode');
-    
-    let maxNum = 0;
-    allReqJobs.forEach(job => {
-      const num = parseInt(job.jobCode.replace('REQ', ''), 10);
-      if (num > maxNum) maxNum = num;
-    });
-    
-    const nextSequence = maxNum + 1;
-    jobData.jobCode = `REQ${String(nextSequence).padStart(4, '0')}`;
-    // ----------------------------------------------
+    // AUTO-GENERATE JOB CODE — find only the highest existing REQ number (not all jobs)
+    const lastJob = await Job.findOne(
+      { jobCode: { $regex: /^REQ\d+$/ } },
+      { jobCode: 1 }
+    ).sort({ jobCode: -1 }).lean();
+
+    const maxNum = lastJob?.jobCode
+      ? parseInt(lastJob.jobCode.replace('REQ', ''), 10)
+      : 0;
+    jobData.jobCode = `REQ${String(maxNum + 1).padStart(4, '0')}`;
 
     const job = await Job.create(jobData);
     res.status(201).json(job);
@@ -83,7 +81,7 @@ export const updateJob = async (req, res) => {
       updateData.tatTime = null;
     }
 
-    const updatedJob = await Job.findByIdAndUpdate(req.params.id, updateData, { new: true });
+    const updatedJob = await Job.findByIdAndUpdate(req.params.id, updateData, { new: true }).lean();
     res.json(updatedJob);
   } catch (error) {
     res.status(400).json({ message: error.message });

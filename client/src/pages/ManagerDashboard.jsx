@@ -41,7 +41,7 @@ async function apiFetch(path) {
 const PrimaryStatCard = ({ title, value, trend, icon: Icon, onClick }) => (
   <div 
     onClick={onClick}
-    className="relative overflow-hidden bg-[#3530a0] rounded-[1.5rem] p-6 text-white shadow-lg h-44 flex flex-col justify-between cursor-pointer hover:shadow-2xl transition-all hover:scale-[1.02]"
+    className="relative overflow-hidden bg-[#3530a0] rounded-[1.5rem] p-6 text-white shadow-lg h-44 flex flex-col justify-between cursor-pointer"
   >
     <div className="relative z-10 flex justify-between items-start">
       <div>
@@ -85,7 +85,7 @@ const BubbleStatCard = ({ title, value, trend, icon: Icon, theme = 'blue', onCli
   return (
     <div 
       onClick={onClick}
-      className="relative bg-white rounded-[1.5rem] p-6 shadow-sm border border-gray-100 h-44 flex flex-col justify-between cursor-pointer hover:shadow-lg transition-all hover:scale-[1.02] overflow-hidden"
+      className="relative bg-white rounded-[1.5rem] p-6 shadow-sm border border-gray-100 h-44 flex flex-col justify-between cursor-pointer overflow-hidden"
     >
       {/* THE BUBBLE EFFECT */}
       <div className={clsx("absolute -top-6 -left-6 w-36 h-36 rounded-full opacity-100 pointer-events-none", t.bubble)}></div>
@@ -124,7 +124,6 @@ export default function AdminDashboard() {
 
   const [candidates, setCandidates] = useState([]);
   const [recruiters, setRecruiters] = useState([]);
-  const [interviews, setInterviews] = useState([]);
   const [clients,    setClients   ] = useState([]);
   const [jobs,       setJobs      ] = useState([]);
   const [loading,    setLoading   ] = useState(true);
@@ -132,14 +131,16 @@ export default function AdminDashboard() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [candR, recR, intR, clientR, jobsR] = await Promise.allSettled([
-          apiFetch('/candidates'), apiFetch('/recruiters'), apiFetch('/interviews'), apiFetch('/clients'), apiFetch('/jobs')
+        const [candR, recR, jobsR, clientR] = await Promise.allSettled([
+          apiFetch('/candidates'),
+          apiFetch('/recruiters'),
+          apiFetch('/jobs'),
+          apiFetch('/clients'),
         ]);
-        if (candR.status === 'fulfilled') setCandidates(candR.value);
-        if (recR.status === 'fulfilled') setRecruiters(recR.value);
-        if (intR.status === 'fulfilled') setInterviews(intR.value);
+        if (candR.status   === 'fulfilled') setCandidates(candR.value);
+        if (recR.status    === 'fulfilled') setRecruiters(recR.value);
+        if (jobsR.status   === 'fulfilled') setJobs(jobsR.value);
         if (clientR.status === 'fulfilled') setClients(clientR.value);
-        if (jobsR.status === 'fulfilled') setJobs(jobsR.value);
       } catch (err) {
         toast({ title: 'Sync Error', description: 'Check server connection', variant: 'destructive' });
       } finally { setLoading(false); }
@@ -214,7 +215,7 @@ export default function AdminDashboard() {
         <div className="flex items-center gap-2 text-xs font-bold text-gray-500 bg-white px-4 py-2 rounded-lg shadow-sm">
           <span>{formattedDate}</span>
           <span className="relative flex h-3 w-3">
-             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
+             
              <span className="relative inline-flex rounded-full h-3 w-3 bg-purple-500"></span>
           </span>
         </div>
@@ -360,7 +361,7 @@ export default function AdminDashboard() {
           <h3 className="text-base font-bold text-slate-800">Recruiter Performance Details</h3>
           <button 
             onClick={() => navigate('/admin/recruiters')} 
-            className="bg-[#283086] text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wide hover:bg-blue-900 transition-colors shadow-lg"
+            className="bg-[#283086] text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wide hover:bg-blue-900 shadow-lg"
           >
             View All Recruiters
           </button>
@@ -380,7 +381,7 @@ export default function AdminDashboard() {
             </thead>
             <tbody className="divide-y divide-gray-50 bg-white">
               {recruiterStats.map((r, i) => (
-                <tr key={i} className="hover:bg-blue-50/30 transition-colors">
+                <tr key={i} className="hover:bg-blue-50/30">
                   <td className="px-8 py-5 font-bold text-slate-700">{r.fullName}</td>
                   <td className="px-4 py-5 text-center text-blue-600 font-black">{r.submissions}</td>
                   <td className="px-4 py-5 text-center text-orange-400 font-bold">{r.hold}</td>

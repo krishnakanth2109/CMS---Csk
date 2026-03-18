@@ -1,20 +1,9 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
-import { motion, AnimatePresence } from "framer-motion";
 import {
-  BuildingOfficeIcon,
-  UserIcon,
-  XMarkIcon,
-  EyeIcon,
-  PencilIcon,
-  PlusIcon,
-  CheckCircleIcon,
-  NoSymbolIcon,
-  MapPinIcon, // Added Icon
-  CurrencyDollarIcon, // Added Icon
-  ClockIcon // Added Icon
-} from "@heroicons/react/24/outline";
+  Building2, User, X, Eye, Pencil, Plus, CheckCircle, Ban, MapPin, DollarSign, Clock
+} from "lucide-react";
 
 const BASE_URL = (import.meta.env.VITE_API_URL || "http://localhost:5000").replace(/\/$/, '');
 const API_URL = `${BASE_URL}/api`;
@@ -25,21 +14,14 @@ const inputCls = "w-full px-3 py-2 border border-zinc-300 dark:border-zinc-700 r
 /* ---------------- DETAIL MODAL ---------------- */
 const ClientDetailCard = ({ client, onClose }) => {
   return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-        onClick={onClose}
+    <div
+      className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto border border-zinc-200 dark:border-zinc-800"
+        onClick={(e) => e.stopPropagation()}
       >
-        <motion.div
-          initial={{ scale: 0.95, opacity: 0, y: 10 }}
-          animate={{ scale: 1, opacity: 1, y: 0 }}
-          exit={{ scale: 0.95, opacity: 0, y: 10 }}
-          className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto border border-zinc-200 dark:border-zinc-800"
-          onClick={(e) => e.stopPropagation()}
-        >
           {/* Grey Gradient Header */}
           <div className="bg-gradient-to-r from-zinc-800 to-zinc-950 text-white p-6 rounded-t-2xl border-b border-zinc-700">
             <div className="flex justify-between items-start">
@@ -50,15 +32,14 @@ const ClientDetailCard = ({ client, onClose }) => {
                     {client.clientId}
                   </span>
                   {client.industry && <span>• {client.industry}</span>}
-                  {/* Added Location in Header */}
                   {client.clientLocation && <span>• {client.clientLocation}</span>}
                 </div>
               </div>
               <button
                 onClick={onClose}
-                className="p-1.5 hover:bg-zinc-700 rounded-lg transition-colors text-zinc-400 hover:text-white"
+                className="p-1.5 hover:bg-zinc-700 rounded-lg text-zinc-400 hover:text-white"
               >
-                <XMarkIcon className="w-6 h-6" />
+                <X className="w-6 h-6" />
               </button>
             </div>
           </div>
@@ -68,7 +49,7 @@ const ClientDetailCard = ({ client, onClose }) => {
               {/* Contact Info Card */}
               <div className="bg-zinc-50 dark:bg-zinc-800/50 p-5 rounded-xl border border-zinc-100 dark:border-zinc-800">
                 <h3 className="font-semibold text-lg mb-4 flex items-center gap-2 text-zinc-900 dark:text-zinc-100 border-b border-zinc-200 dark:border-zinc-700 pb-2">
-                  <UserIcon className="w-5 h-5 text-zinc-500" /> Contact Details
+                  <User className="w-5 h-5 text-zinc-500" /> Contact Details
                 </h3>
                 <div className="space-y-3 text-sm">
                   <p className="flex justify-between"><span className="text-zinc-500">Contact Person:</span> <span className="font-medium">{client.contactPerson || "-"}</span></p>
@@ -83,17 +64,14 @@ const ClientDetailCard = ({ client, onClose }) => {
               {/* Business Terms Card */}
               <div className="bg-zinc-50 dark:bg-zinc-800/50 p-5 rounded-xl border border-zinc-100 dark:border-zinc-800">
                 <h3 className="font-semibold text-lg mb-4 flex items-center gap-2 text-zinc-900 dark:text-zinc-100 border-b border-zinc-200 dark:border-zinc-700 pb-2">
-                  <BuildingOfficeIcon className="w-5 h-5 text-zinc-500" /> Business Terms
+                  <Building2 className="w-5 h-5 text-zinc-500" /> Business Terms
                 </h3>
                 <div className="space-y-3 text-sm">
                   <p className="flex justify-between"><span className="text-zinc-500">Commission Rate:</span> <span className="font-medium">{client.percentage ? `${client.percentage}%` : "-"}</span></p>
                   <p className="flex justify-between"><span className="text-zinc-500">Candidate Period:</span> <span className="font-medium">{client.candidatePeriod ? `${client.candidatePeriod} months` : "-"}</span></p>
                   <p className="flex justify-between"><span className="text-zinc-500">Replacement:</span> <span className="font-medium">{client.replacementPeriod ? `${client.replacementPeriod} days` : "-"}</span></p>
-                  
-                  {/* NEW FIELDS IN DETAIL CARD */}
                   <p className="flex justify-between"><span className="text-zinc-500">Locking Period:</span> <span className="font-medium">{client.lockingPeriod || "-"}</span></p>
                   <p className="flex justify-between"><span className="text-zinc-500">Payment Mode:</span> <span className="font-medium">{client.paymentMode || "-"}</span></p>
-                  
                   <p className="flex justify-between"><span className="text-zinc-500">GST Number:</span> <span className="font-medium font-mono text-xs">{client.gstNumber || "-"}</span></p>
                   <p className="flex justify-between"><span className="text-zinc-500">Status:</span>
                     <span className={`px-2 py-0.5 rounded text-xs font-medium ${client.active ? 'bg-zinc-200 text-zinc-800 dark:bg-zinc-700 dark:text-zinc-200' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
@@ -111,9 +89,8 @@ const ClientDetailCard = ({ client, onClose }) => {
               </div>
             )}
           </div>
-        </motion.div>
-      </motion.div>
-    </AnimatePresence>
+      </div>
+    </div>
   );
 };
 
@@ -122,10 +99,10 @@ export default function AdminClientInfo() {
   const { toast } = useToast();
   const { authHeaders } = useAuth();
 
-  const getAuthHeader = async () => ({
+  const getAuthHeader = useCallback(async () => ({
     "Content-Type": "application/json",
     ...(await authHeaders()),
-  });
+  }), [authHeaders]);
 
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -148,7 +125,7 @@ export default function AdminClientInfo() {
   };
   const [form, setForm] = useState(initialFormState);
 
-  const fetchClients = async () => {
+  const fetchClients = useCallback(async () => {
     setLoading(true);
     try {
       const headers = await getAuthHeader();
@@ -161,7 +138,7 @@ export default function AdminClientInfo() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [getAuthHeader]);
 
   useEffect(() => { fetchClients(); }, []);
 
@@ -275,11 +252,20 @@ export default function AdminClientInfo() {
         body: JSON.stringify(form),
       });
       if (!res.ok) throw new Error();
+      const saved = await res.json();
+      const normalized = { ...saved, id: saved._id };
+
+      // Update local state directly — no full refetch needed
+      if (editingClient) {
+        setClients(prev => prev.map(c => c.id === editingClient.id ? normalized : c));
+      } else {
+        setClients(prev => [normalized, ...prev]);
+      }
+
       toast({ title: "Success", description: "Client saved successfully" });
       setShowForm(false);
       setEditingClient(null);
       setForm(initialFormState);
-      fetchClients();
     } catch {
       toast({ title: "Error", description: "Save failed", variant: "destructive" });
     }
@@ -308,19 +294,20 @@ export default function AdminClientInfo() {
         headers,
         body: JSON.stringify({ active: !client.active }),
       });
-      fetchClients();
+      // Update local state directly — no full refetch
+      setClients(prev => prev.map(c => c.id === client.id ? { ...c, active: !client.active } : c));
     } catch { }
   };
 
   const uniqueIndustries = useMemo(() => Array.from(new Set(clients.map((c) => c.industry).filter(Boolean))), [clients]);
 
-  const filteredClients = clients.filter((c) => {
+  const filteredClients = useMemo(() => clients.filter((c) => {
     const s = searchTerm.toLowerCase();
     const matchSearch = c.companyName.toLowerCase().includes(s) || (c.email || "").toLowerCase().includes(s);
     const matchIndustry = industryFilter === "all" || c.industry === industryFilter;
     const matchStatus = statusFilter === "all" || (statusFilter === "active" ? c.active !== false : c.active === false);
     return matchSearch && matchIndustry && matchStatus;
-  });
+  }), [clients, searchTerm, industryFilter, statusFilter]);
 
   return (
     <div className="flex-1 p-6 space-y-8 bg-zinc-50 dark:bg-zinc-950 min-h-screen text-zinc-900 dark:text-zinc-100">
@@ -337,17 +324,16 @@ export default function AdminClientInfo() {
             setShowForm(!showForm);
             setForm(initialFormState);
           }}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 rounded-lg text-sm font-medium hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-all shadow-sm"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 rounded-lg text-sm font-medium hover:bg-zinc-800 dark:hover:bg-zinc-200 shadow-sm"
         >
-          {showForm ? <XMarkIcon className="w-4 h-4" /> : <PlusIcon className="w-4 h-4" />}
+          {showForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
           {showForm ? "Cancel" : "Add Client"}
         </button>
       </div>
 
       {/* Form Panel */}
       {showForm && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
+        <div
           className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm p-6"
         >
           <h3 className="font-semibold text-lg mb-6 border-b border-zinc-100 dark:border-zinc-800 pb-3 text-zinc-900 dark:text-white">
@@ -405,13 +391,13 @@ export default function AdminClientInfo() {
             <div className="md:col-span-3 flex justify-end pt-4">
               <button
                 onClick={handleSubmit}
-                className="px-6 py-2 bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 rounded-lg text-sm font-medium hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-all shadow-sm"
+                className="px-6 py-2 bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 rounded-lg text-sm font-medium hover:bg-zinc-800 dark:hover:bg-zinc-200 shadow-sm"
               >
                 {editingClient ? "Update Client" : "Save Client"}
               </button>
             </div>
           </div>
-        </motion.div>
+        </div>
       )}
 
       {/* Filters */}
@@ -457,7 +443,7 @@ export default function AdminClientInfo() {
                 {filteredClients.length === 0 ? (
                   <tr><td colSpan={5} className="text-center py-12 text-zinc-400">No clients found matching criteria.</td></tr>
                 ) : filteredClients.map((client) => (
-                  <tr key={client.id} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/20 transition-colors">
+                  <tr key={client.id} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/20">
                     <td className="px-6 py-4">
                       <div className="font-semibold text-zinc-900 dark:text-zinc-100">{client.companyName}</div>
                       <div className="text-xs text-zinc-500 font-mono mt-0.5">{client.clientId}</div>
@@ -485,25 +471,25 @@ export default function AdminClientInfo() {
                         <button
                           onClick={() => setSelectedClient(client)}
                           title="View Details"
-                          className="p-2 rounded-lg text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-white transition-colors"
+                          className="p-2 rounded-lg text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-white"
                         >
-                          <EyeIcon className="w-4 h-4" />
+                          <Eye className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => handleEditClient(client)}
                           title="Edit"
-                          className="p-2 rounded-lg text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-white transition-colors"
+                          className="p-2 rounded-lg text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-white"
                         >
-                          <PencilIcon className="w-4 h-4" />
+                          <Pencil className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => handleToggleActive(client)}
                           title={client.active ? "Deactivate" : "Activate"}
-                          className="p-2 rounded-lg text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-white transition-colors"
+                          className="p-2 rounded-lg text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-white"
                         >
                           {client.active !== false
-                            ? <NoSymbolIcon className="w-4 h-4" />
-                            : <CheckCircleIcon className="w-4 h-4" />}
+                            ? <Ban className="w-4 h-4" />
+                            : <CheckCircle className="w-4 h-4" />}
                         </button>
                       </div>
                     </td>

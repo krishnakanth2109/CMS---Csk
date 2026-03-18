@@ -1,37 +1,28 @@
 // --- START OF FILE AdminRequirements.jsx ---
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
-import { motion, AnimatePresence } from "framer-motion";
 import {
-  XMarkIcon, EyeIcon, PencilIcon, PlusIcon, CheckCircleIcon, NoSymbolIcon,
-  BriefcaseIcon, AcademicCapIcon, BuildingOfficeIcon, CalendarIcon, MapPinIcon,
-  TrashIcon 
-} from "@heroicons/react/24/outline";
+  X, Eye, Pencil, Plus, CheckCircle, Ban,
+  Briefcase, GraduationCap, Building2, Calendar, MapPin, Trash2
+} from "lucide-react";
 
 const BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/$/, '');
 const API_URL  = `${BASE_URL}/api`;
 
-const inputCls = "w-full px-3 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg text-sm outline-none focus:ring-2 focus:ring-zinc-500 bg-white dark:bg-zinc-900 dark:text-zinc-100 transition-shadow placeholder-zinc-400";
+const inputCls = "w-full px-3 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg text-sm outline-none focus:ring-2 focus:ring-zinc-500 bg-white dark:bg-zinc-900 dark:text-zinc-100 placeholder-zinc-400";
 
 /* ---------------- JOB DETAIL MODAL ---------------- */
 const JobDetailCard = ({ job, onClose }) => {
   return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }} 
-        animate={{ opacity: 1 }} 
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-        onClick={onClose}
+    <div
+      className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto border border-zinc-200 dark:border-zinc-800"
+        onClick={e => e.stopPropagation()}
       >
-        <motion.div
-          initial={{ scale: 0.95, opacity: 0, y: 10 }}
-          animate={{ scale: 1, opacity: 1, y: 0 }}
-          exit={{ scale: 0.95, opacity: 0, y: 10 }}
-          className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto border border-zinc-200 dark:border-zinc-800"
-          onClick={e => e.stopPropagation()}
-        >
           <div className="bg-gradient-to-r from-zinc-800 to-zinc-950 text-white p-6 rounded-t-2xl border-b border-zinc-700">
              <div className="flex justify-between items-start">
                 <div>
@@ -43,18 +34,17 @@ const JobDetailCard = ({ job, onClose }) => {
                     <span>• {job.clientName}</span>
                   </div>
                 </div>
-                <button onClick={onClose} className="p-1.5 hover:bg-zinc-700 rounded-lg transition-colors text-zinc-400 hover:text-white">
-                  <XMarkIcon className="w-6 h-6" />
+                <button onClick={onClose} className="p-1.5 hover:bg-zinc-700 rounded-lg text-zinc-400 hover:text-white">
+                  <X className="w-6 h-6" />
                 </button>
              </div>
           </div>
 
           <div className="p-6 space-y-6 text-zinc-800 dark:text-zinc-300">
              <div className="grid md:grid-cols-2 gap-8">
-                {/* Requirements Card */}
                 <div className="bg-zinc-50 dark:bg-zinc-800/50 p-5 rounded-xl border border-zinc-100 dark:border-zinc-800">
                   <h3 className="font-semibold text-lg mb-4 flex items-center gap-2 text-zinc-900 dark:text-zinc-100 border-b border-zinc-200 dark:border-zinc-700 pb-2">
-                    <AcademicCapIcon className="w-5 h-5 text-zinc-500" /> Candidate Profile
+                    <GraduationCap className="w-5 h-5 text-zinc-500" /> Candidate Profile
                   </h3>
                   <div className="space-y-3 text-sm">
                     <p className="flex justify-between"><span className="text-zinc-500">Skills:</span> <span className="font-medium text-right ml-4">{job.skills || "-"}</span></p>
@@ -64,11 +54,9 @@ const JobDetailCard = ({ job, onClose }) => {
                     <p className="flex justify-between"><span className="text-zinc-500">Gender:</span> <span className="font-medium">{job.gender || "Any"}</span></p>
                   </div>
                 </div>
-
-                {/* Logistics Card */}
                 <div className="bg-zinc-50 dark:bg-zinc-800/50 p-5 rounded-xl border border-zinc-100 dark:border-zinc-800">
                   <h3 className="font-semibold text-lg mb-4 flex items-center gap-2 text-zinc-900 dark:text-zinc-100 border-b border-zinc-200 dark:border-zinc-700 pb-2">
-                    <BriefcaseIcon className="w-5 h-5 text-zinc-500" /> Job Details
+                    <Briefcase className="w-5 h-5 text-zinc-500" /> Job Details
                   </h3>
                   <div className="space-y-3 text-sm">
                     <p className="flex justify-between"><span className="text-zinc-500">Location:</span> <span className="font-medium">{job.location || "-"}</span></p>
@@ -83,7 +71,6 @@ const JobDetailCard = ({ job, onClose }) => {
                   </div>
                 </div>
              </div>
-
              {job.jdLink && (
                <div className="bg-zinc-100 dark:bg-zinc-800 p-5 rounded-xl border border-zinc-200 dark:border-zinc-700">
                  <h4 className="font-semibold mb-2 text-zinc-900 dark:text-zinc-100 text-sm">Job Description Link</h4>
@@ -93,9 +80,8 @@ const JobDetailCard = ({ job, onClose }) => {
                </div>
              )}
           </div>
-        </motion.div>
-      </motion.div>
-    </AnimatePresence>
+      </div>
+    </div>
   );
 };
 
@@ -104,10 +90,10 @@ export default function AdminRequirements() {
   const { toast } = useToast();
   const { authHeaders } = useAuth();
 
-  const getAuthHeader = async () => ({
+  const getAuthHeader = useCallback(async () => ({
     'Content-Type': 'application/json',
     ...(await authHeaders()),
-  });
+  }), [authHeaders]);
 
   const [jobs, setJobs] = useState([]);
   const [clients, setClients] = useState([]);
@@ -185,7 +171,7 @@ export default function AdminRequirements() {
   };
   // ───────────────────────────────────────────────────────────────────────
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const headers = await getAuthHeader();
@@ -208,12 +194,9 @@ export default function AdminRequirements() {
       if(recRes.ok) {
         const data = await recRes.json();
         const recruitersArray = Array.isArray(data) ? data : data.data || data.recruiters || [];
-        
-        // STANDARD NAME FORMATTING LOGIC
         setRecruiters(recruitersArray.map((r) => {
           let recName = r.name || r.username || r.fullName || r.email || 'Unnamed Recruiter';
           if (r.firstName && r.lastName) recName = `${r.firstName} ${r.lastName}`;
-          
           return { id: r._id || r.id, name: recName, email: r.email };
         }));
       }
@@ -222,7 +205,7 @@ export default function AdminRequirements() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [getAuthHeader]);
 
   useEffect(() => { fetchData(); }, []);
 
@@ -322,12 +305,21 @@ export default function AdminRequirements() {
 
       if (!response.ok) throw new Error('Failed to save job');
 
+      const saved = await response.json();
+      const normalized = { ...saved, id: saved._id };
+
+      // Update local state directly — no full refetch needed
+      if (editingJob) {
+        setJobs(prev => prev.map(j => j.id === editingJob.id ? normalized : j));
+      } else {
+        setJobs(prev => [normalized, ...prev]);
+      }
+
       toast({ title: "Success", description: "Job requirement saved successfully" });
       setShowForm(false);
       setEditingJob(null);
       setErrors({});
       setForm(initialFormState);
-      fetchData();
     } catch (error) {
       toast({ title: "Error", description: "Failed to save data. Please try again.", variant: "destructive" });
     }
@@ -351,43 +343,39 @@ export default function AdminRequirements() {
         headers: await getAuthHeader(),
         body: JSON.stringify({ active: !job.active })
       });
-      fetchData();
+      // Update local state directly — no full refetch
+      setJobs(prev => prev.map(j => j.id === job.id ? { ...j, active: !job.active } : j));
       toast({ title: "Status Updated" });
-    } catch (e) { 
-      toast({ title: "Error", variant: "destructive" }); 
+    } catch (e) {
+      toast({ title: "Error", variant: "destructive" });
     }
   };
 
-  // ✅ DELETE REQUIREMENT HANDLER
   const handleDeleteJob = async (jobId) => {
     if (!window.confirm("Are you sure you want to delete this requirement? This action cannot be undone.")) {
       return;
     }
-
     try {
       const response = await fetch(`${API_URL}/jobs/${jobId}`, {
         method: 'DELETE',
         headers: await getAuthHeader()
       });
-
       if (!response.ok) throw new Error('Failed to delete job');
-
+      // Remove from local state directly — no full refetch
+      setJobs(prev => prev.filter(j => j.id !== jobId));
       toast({ title: "Deleted", description: "Requirement deleted successfully." });
-      fetchData(); // Refresh the list
     } catch (error) {
       toast({ title: "Error", description: "Failed to delete requirement.", variant: "destructive" });
     }
   };
 
-  const filteredJobs = jobs.filter(j => {
-    const matchesSearch = j.position?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+  const filteredJobs = useMemo(() => jobs.filter(j => {
+    const matchesSearch = j.position?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           j.clientName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           j.jobCode?.toLowerCase().includes(searchTerm.toLowerCase());
-    
     const matchesClient = selectedClientFilter === "" || j.clientName === selectedClientFilter;
-    
     return matchesSearch && matchesClient;
-  });
+  }), [jobs, searchTerm, selectedClientFilter]);
 
   return (
     <div className="flex-1 grid grid-cols-1 min-w-0 w-full p-6 space-y-8 overflow-y-auto overflow-x-hidden bg-slate-50 dark:bg-zinc-950 min-h-screen text-zinc-900 dark:text-zinc-100">
@@ -406,20 +394,16 @@ export default function AdminRequirements() {
               setForm(initialFormState);
               setErrors({});
             }}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 rounded-lg text-sm font-medium hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-all shadow-sm"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 rounded-lg text-sm font-medium hover:bg-zinc-800 dark:hover:bg-zinc-200 shadow-sm"
           >
-            {showForm ? <XMarkIcon className="w-4 h-4" /> : <PlusIcon className="w-4 h-4" />}
+            {showForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
             {showForm ? "Cancel" : "Add Requirement"}
           </button>
         </div>
 
         {/* Form Section */}
-        <AnimatePresence>
-          {showForm && (
-            <motion.div 
-              initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, height: 0 }}
-              className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm p-6 overflow-hidden"
-            >
+        {showForm && (
+          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm p-6 overflow-hidden">
               <h3 className="font-semibold text-lg mb-6 border-b border-zinc-100 dark:border-zinc-800 pb-3 text-zinc-900 dark:text-white">
                 {editingJob ? "Edit Job Requirement" : "Create New Requirement"}
               </h3>
@@ -552,13 +536,12 @@ export default function AdminRequirements() {
               </div>
 
               <div className="flex justify-end pt-5 mt-4 border-t border-zinc-100 dark:border-zinc-800">
-                <button onClick={handleSubmit} className="px-6 py-2 bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 rounded-lg text-sm font-medium hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-all shadow-sm">
+                <button onClick={handleSubmit} className="px-6 py-2 bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 rounded-lg text-sm font-medium hover:bg-zinc-800 dark:hover:bg-zinc-200 shadow-sm">
                   {editingJob ? "Update Requirement" : "Save Requirement"}
                 </button>
               </div>
-            </motion.div>
+            </div>
           )}
-        </AnimatePresence>
 
         {/* Filters & Search Bar */}
         <div className="bg-white dark:bg-zinc-900 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex flex-col sm:flex-row gap-4 items-center">
@@ -644,7 +627,7 @@ export default function AdminRequirements() {
                     {filteredJobs.length === 0 ? (
                       <tr><td colSpan={9} className="text-center py-12 text-zinc-400">No requirements found.</td></tr>
                     ) : filteredJobs.map(job => (
-                      <tr key={job.id} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/20 transition-colors">
+                      <tr key={job.id} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/20">
                         
                         {/* Job Code */}
                         <td className="px-6 py-4">
@@ -661,7 +644,7 @@ export default function AdminRequirements() {
                         {/* Company */}
                         <td className="px-6 py-4">
                           <div className="font-semibold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
-                            <BuildingOfficeIcon className="w-4 h-4 text-zinc-400" />
+                            <Building2 className="w-4 h-4 text-zinc-400" />
                             {job.clientName}
                           </div>
                         </td>
@@ -669,7 +652,7 @@ export default function AdminRequirements() {
                         {/* Location */}
                         <td className="px-6 py-4">
                           <div className="text-sm text-zinc-600 dark:text-zinc-400 flex items-center gap-1.5">
-                            <MapPinIcon className="w-4 h-4 text-zinc-400" />
+                            <MapPin className="w-4 h-4 text-zinc-400" />
                             {job.location || 'N/A'}
                           </div>
                         </td>
@@ -709,7 +692,7 @@ export default function AdminRequirements() {
                         {/* Expiry (TAT) */}
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-zinc-500 dark:text-zinc-400">
                           <div className="flex items-center gap-1.5">
-                            <CalendarIcon className="w-4 h-4" />
+                            <Calendar className="w-4 h-4" />
                             {job.tatTime 
                               ? new Date(job.tatTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) 
                               : 'No TAT'
@@ -735,19 +718,19 @@ export default function AdminRequirements() {
                         <td className="px-6 py-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
                             {/* View Button */}
-                            <button onClick={() => setSelectedJob(job)} title="View Details" className="p-1.5 rounded-lg text-zinc-400 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-zinc-800 dark:hover:text-blue-400 transition-colors">
-                              <EyeIcon className="w-5 h-5" />
+                            <button onClick={() => setSelectedJob(job)} title="View Details" className="p-1.5 rounded-lg text-zinc-400 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-zinc-800 dark:hover:text-blue-400">
+                              <Eye className="w-5 h-5" />
                             </button>
                             {/* Edit Button */}
-                            <button onClick={() => handleEditJob(job)} title="Edit Requirement" className="p-1.5 rounded-lg text-zinc-400 hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-zinc-800 dark:hover:text-amber-400 transition-colors">
-                              <PencilIcon className="w-5 h-5" />
+                            <button onClick={() => handleEditJob(job)} title="Edit Requirement" className="p-1.5 rounded-lg text-zinc-400 hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-zinc-800 dark:hover:text-amber-400">
+                              <Pencil className="w-5 h-5" />
                             </button>
                             {/* Toggle Active Button */}
-                            <button onClick={() => handleToggleActive(job)} title={job.active !== false ? "Mark as Inactive" : "Mark as Active"} className={`p-1.5 rounded-lg transition-colors ${job.active !== false ? 'text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-zinc-800 dark:hover:text-red-400' : 'text-zinc-400 hover:bg-green-50 hover:text-green-600 dark:hover:bg-zinc-800 dark:hover:text-green-400'}`}>
-                              {job.active !== false ? <NoSymbolIcon className="w-5 h-5" /> : <CheckCircleIcon className="w-5 h-5" />}
+                            <button onClick={() => handleToggleActive(job)} title={job.active !== false ? "Mark as Inactive" : "Mark as Active"} className={`p-1.5 rounded-lg ${job.active !== false ? 'text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-zinc-800 dark:hover:text-red-400' : 'text-zinc-400 hover:bg-green-50 hover:text-green-600 dark:hover:bg-zinc-800 dark:hover:text-green-400'}`}>
+                              {job.active !== false ? <Ban className="w-5 h-5" /> : <CheckCircle className="w-5 h-5" />}
                             </button>
-                            <button onClick={() => handleDeleteJob(job.id)} title="Delete Requirement" className="p-1.5 rounded-lg text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-zinc-800 dark:hover:text-red-400 transition-colors">
-                              <TrashIcon className="w-5 h-5" />
+                            <button onClick={() => handleDeleteJob(job.id)} title="Delete Requirement" className="p-1.5 rounded-lg text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-zinc-800 dark:hover:text-red-400">
+                              <Trash2 className="w-5 h-5" />
                             </button>
                           </div>
                         </td>

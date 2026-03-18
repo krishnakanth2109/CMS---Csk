@@ -308,39 +308,24 @@ export default function RecruiterCandidates() {
       const authH = await authHeaders();
       const headers = { ...authH };
 
+      // Backend already filters candidates by recruiterId for non-admin/manager roles
+      // No need to fetch all and filter client-side
       const [candRes, jobRes, clientRes] = await Promise.all([
         fetch(`${API_URL}/candidates`, { headers }),
         fetch(`${API_URL}/jobs`, { headers }),
         fetch(`${API_URL}/clients`, { headers })
       ]);
 
-      if (candRes.ok && jobRes.ok && clientRes.ok) {
+      if (candRes.ok) {
         const allCandidates = await candRes.json();
-        const allJobs = await jobRes.json();
-        const allClients = await clientRes.json();
-
-        let finalCandidates = allCandidates;
-
-        if (currentUser?._id) {
-          finalCandidates = allCandidates.filter(c => {
-            const cRecruiterId = typeof c.recruiterId === 'object'
-              ? String(c.recruiterId?._id)
-              : String(c.recruiterId || '');
-            return cRecruiterId === String(currentUser._id);
-          });
-        }
-
-        finalCandidates.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        
-        const fixedCandidates = finalCandidates.map((c) => ({
+        const fixedCandidates = allCandidates.map((c) => ({
           ...c,
           status: Array.isArray(c.status) ? c.status : [c.status || 'Submitted']
         }));
-        
         setCandidates(fixedCandidates);
-        setJobs(allJobs);
-        setClients(allClients);
       }
+      if (jobRes.ok) setJobs(await jobRes.json());
+      if (clientRes.ok) setClients(await clientRes.json());
     } catch (error) {
       toast({ variant: "destructive", title: "Error", description: "Failed to load data" });
     } finally {
@@ -694,7 +679,14 @@ export default function RecruiterCandidates() {
       if (res.ok) {
         toast({ title: "Success", description: `Candidate ${isEdit ? 'updated' : 'added'} successfully` });
         setIsAddDialogOpen(false); setIsEditDialogOpen(false);
-        fetchData(); setFormData(initialFormState);
+        // Update state directly — no full refetch needed
+        const fixedData = { ...data, status: Array.isArray(data.status) ? data.status : [data.status || 'Submitted'] };
+        if (isEdit) {
+          setCandidates(prev => prev.map(c => c._id === selectedCandidateId ? { ...c, ...fixedData } : c));
+        } else {
+          setCandidates(prev => [fixedData, ...prev]);
+        }
+        setFormData(initialFormState);
       } else {
         throw new Error(data.message || 'Operation failed');
       }
@@ -1390,14 +1382,14 @@ const StatCard = ({ title, value, color, active, onClick }) => {
   };
   const currentStyle = styles[color] || styles.blue;
   return (
-    <div onClick={onClick} className={`p-4 rounded-lg shadow-sm border border-slate-200 border-l-4 cursor-pointer hover:shadow-md transition-all relative overflow-hidden bg-white ${currentStyle} ${active ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}>
+    <div onClick={onClick} className={`p-4 rounded-lg shadow-sm border border-slate-200 border-l-4 cursor-pointer relative overflow-hidden bg-white ${currentStyle} ${active ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}>
       <div className="flex justify-between items-center relative z-10">
         <div>
           <h3 className="text-2xl font-bold">{value}</h3>
           <p className="text-sm font-medium opacity-80">{title}</p>
         </div>
       </div>
-      {active && <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-blue-600 animate-pulse" />}
+      {active && <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-blue-600" />}
     </div>
   );
 };

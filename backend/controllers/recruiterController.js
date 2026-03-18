@@ -180,7 +180,7 @@ export const getRecruiters = async (req, res) => {
     // so the Inactive counter always showed 0 and deactivated cards disappeared.
     const recruiters = await User.find({
       role: { $in: ['recruiter', 'admin'] }
-    }).select('-password').sort({ role: 1, firstName: 1 });
+    }).select('-password').sort({ role: 1, firstName: 1 }).lean();
     res.json(recruiters);
   } catch (error) {
     res.status(500).json({ message: error.message });

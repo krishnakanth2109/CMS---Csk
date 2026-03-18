@@ -65,6 +65,12 @@ const clientSchema = mongoose.Schema({
   timestamps: true,
 });
 
+// ── Indexes for fast queries ──────────────────────────────────────────────────
+clientSchema.index({ companyName: 1 });   // search by company name
+clientSchema.index({ active: 1 });         // status filter
+clientSchema.index({ industry: 1 });       // industry filter
+clientSchema.index({ createdAt: -1 });     // default sort newest first
+
 const Client = mongoose.model('Client', clientSchema);
 
 export default Client;
