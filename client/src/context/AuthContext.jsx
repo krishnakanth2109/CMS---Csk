@@ -8,39 +8,23 @@ const SESSION_KEY = 'currentUser';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 9-HOUR SESSION
-// We store a sessionExpiry timestamp at login time: Date.now() + 9hrs.
-// Every token read checks this FIRST before refreshing.
-// Firebase tokens themselves expire every 1 hour — we refresh them silently
-// via the refreshToken, but the hard wall-clock limit is 9 hours from login.
 // ─────────────────────────────────────────────────────────────────────────────
-const SESSION_DURATION_MS = 9 * 60 * 60 * 1000; // 9 hours in ms
+const SESSION_DURATION_MS = 9 * 60 * 60 * 1000;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Decode JWT exp field without any library
-// ─────────────────────────────────────────────────────────────────────────────
 const getTokenExpiry = (token) => {
   try {
     const payload = JSON.parse(atob(token.split('.')[1]));
-    return payload.exp * 1000; // seconds → ms
+    return payload.exp * 1000;
   } catch {
     return 0;
   }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// isSessionExpired — checks the 9-hour wall-clock cap
-// ─────────────────────────────────────────────────────────────────────────────
 const isSessionExpired = (session) => {
   if (!session?.sessionExpiry) return true;
   return Date.now() > session.sessionExpiry;
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// refreshFirebaseToken
-// Uses the stored refreshToken to get a new Firebase ID token silently.
-// Called automatically when the 1-hour Firebase token is about to expire.
-// Will bail out and return null if the 9-hour session has already ended.
-// ─────────────────────────────────────────────────────────────────────────────
 const refreshFirebaseToken = async () => {
   try {
     const stored = sessionStorage.getItem(SESSION_KEY);
@@ -48,7 +32,6 @@ const refreshFirebaseToken = async () => {
 
     const session = JSON.parse(stored);
 
-    // 9-hour hard cap — don't refresh if the session has expired
     if (isSessionExpired(session)) {
       console.warn('[Auth] 9-hour session expired. Clearing session.');
       sessionStorage.removeItem(SESSION_KEY);
@@ -74,10 +57,8 @@ const refreshFirebaseToken = async () => {
 
     const data = await res.json();
     const newIdToken      = data.id_token;
-    const newRefreshToken = data.refresh_token; // Firebase may rotate this
+    const newRefreshToken = data.refresh_token;
 
-    // Persist the new tokens but deliberately KEEP the original sessionExpiry
-    // so the 9-hour clock cannot be extended by token refreshes
     const updated = { ...session, idToken: newIdToken, refreshToken: newRefreshToken };
     sessionStorage.setItem(SESSION_KEY, JSON.stringify(updated));
     console.log('[Auth] Firebase ID token refreshed silently.');
@@ -88,14 +69,6 @@ const refreshFirebaseToken = async () => {
   }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// getValidToken
-// Central token getter used by authHeaders() and getIdToken().
-// Order of checks:
-//   1. 9-hour session wall-clock expired? → null (force re-login)
-//   2. Firebase ID token expiring within 5 min? → silently refresh
-//   3. Token still valid → return as-is
-// ─────────────────────────────────────────────────────────────────────────────
 const getValidToken = async () => {
   try {
     const stored = sessionStorage.getItem(SESSION_KEY);
@@ -103,7 +76,6 @@ const getValidToken = async () => {
 
     const session = JSON.parse(stored);
 
-    // 1. Check 9-hour session hard cap
     if (isSessionExpired(session)) {
       console.warn('[Auth] 9-hour session expired. Clearing session.');
       sessionStorage.removeItem(SESSION_KEY);
@@ -113,7 +85,6 @@ const getValidToken = async () => {
     const { idToken } = session;
     if (!idToken) return null;
 
-    // 2. Check Firebase 1-hour token expiry (refresh 5 min early)
     const expiresAt    = getTokenExpiry(idToken);
     const FIVE_MINUTES = 5 * 60 * 1000;
 
@@ -122,7 +93,6 @@ const getValidToken = async () => {
       return await refreshFirebaseToken();
     }
 
-    // 3. Token still valid
     return idToken;
   } catch {
     return null;
@@ -138,7 +108,6 @@ export function AuthProvider({ children }) {
       const stored = sessionStorage.getItem(SESSION_KEY);
       if (!stored) return null;
       const session = JSON.parse(stored);
-      // On app load: clear immediately if 9-hour session already elapsed
       if (isSessionExpired(session)) {
         sessionStorage.removeItem(SESSION_KEY);
         return null;
@@ -149,13 +118,31 @@ export function AuthProvider({ children }) {
     }
   });
 
-  const [loading, setLoading] = useState(false);
+  // ─────────────────────────────────────────────────────────────────────────
+  // FIX: REMOVED the internal `loading` state from AuthProvider entirely.
+  //
+  // WHY THIS WAS THE BUG:
+  //   The old code had `setLoading(true/false)` inside AuthContext's login().
+  //   When login failed, the sequence was:
+  //     1. Firebase throws → catch in Login.jsx sets local error state
+  //     2. AuthContext's finally → setLoading(false) → triggers AuthProvider re-render
+  //     3. AuthProvider re-render caused Login.jsx to re-render BEFORE error painted
+  //     4. Result: page appeared to "refresh" with no error message visible
+  //
+  // THE FIX:
+  //   Login.jsx manages its own loading state (it already did this correctly).
+  //   AuthContext.login() is now a pure async function — it throws on failure,
+  //   resolves with user data on success. No internal state changes during login.
+  //   This means only Login.jsx's state changes on error → clean error display.
+  // ─────────────────────────────────────────────────────────────────────────
 
   // ── login ────────────────────────────────────────────────────────────────
+  // Throws on ANY failure so Login.jsx catch block always fires correctly.
+  // Does NOT manage loading state — Login.jsx owns that.
   const login = useCallback(async (email, password) => {
-    setLoading(true);
+    // ── Step 1: Firebase REST API sign-in ──────────────────────────────────
+    let firebaseData;
     try {
-      // Step 1: Firebase REST API — sign in with email/password
       const firebaseRes = await fetch(
         `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FB_API_KEY}`,
         {
@@ -164,46 +151,70 @@ export function AuthProvider({ children }) {
           body:    JSON.stringify({ email, password, returnSecureToken: true }),
         }
       );
+      firebaseData = await firebaseRes.json();
 
-      const firebaseData = await firebaseRes.json();
       if (!firebaseRes.ok) {
+        // Extract Firebase error code and throw with BOTH .code and .message set
+        // so Login.jsx getFriendlyError() works on either field
         const code  = firebaseData?.error?.message || 'UNKNOWN_ERROR';
         const error = new Error(code);
-        error.code = code; // Login.jsx reads err.code — must match
+        error.code  = code;
         throw error;
       }
+    } catch (err) {
+      // Re-throw Firebase errors as-is (they already have .code set above)
+      // Also handles network failures (err.message will contain 'fetch' or 'Failed to fetch')
+      if (err.code) throw err; // Already a Firebase error — rethrow directly
 
-      const { idToken, refreshToken } = firebaseData;
+      // Network-level error (no .code) — wrap it cleanly
+      const networkError = new Error('NETWORK_REQUEST_FAILED');
+      networkError.code  = 'NETWORK_REQUEST_FAILED';
+      throw networkError;
+    }
 
-      // Step 2: Verify with backend — backend looks up user in MongoDB
+    const { idToken, refreshToken } = firebaseData;
+
+    // ── Step 2: Verify with backend ────────────────────────────────────────
+    let userData;
+    try {
       const backendRes = await fetch(`${API_URL}/api/auth/login`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ idToken }),
       });
 
-      const userData = await backendRes.json();
-      if (!backendRes.ok) throw new Error(userData.message || 'Backend login failed.');
+      userData = await backendRes.json();
 
-      // Step 3: Persist everything in sessionStorage
-      // sessionExpiry = now + 9 hours — this is the hard wall-clock limit
-      const sessionData = {
-        ...userData,
-        idToken,
-        refreshToken,
-        sessionExpiry: Date.now() + SESSION_DURATION_MS,
-      };
+      if (!backendRes.ok) {
+        // Backend errors: "User not registered." / "Account deactivated."
+        // These should show the exact backend message to the user
+        throw new Error(userData.message || 'Login failed. Please try again.');
+      }
+    } catch (err) {
+      // If it's our thrown Error from above, rethrow it
+      if (err.message && !err.code) throw err;
 
-      sessionStorage.setItem(SESSION_KEY, JSON.stringify(sessionData));
-      setCurrentUser(sessionData);
-
-      const expiryTime = new Date(sessionData.sessionExpiry).toLocaleTimeString();
-      console.log(`[Auth] Login successful. Session expires at ${expiryTime} (9 hours).`);
-
-      return sessionData;
-    } finally {
-      setLoading(false);
+      // Network failure reaching backend
+      const networkError = new Error('NETWORK_REQUEST_FAILED');
+      networkError.code  = 'NETWORK_REQUEST_FAILED';
+      throw networkError;
     }
+
+    // ── Step 3: Persist session (only reached on full success) ─────────────
+    const sessionData = {
+      ...userData,
+      idToken,
+      refreshToken,
+      sessionExpiry: Date.now() + SESSION_DURATION_MS,
+    };
+
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(sessionData));
+    setCurrentUser(sessionData); // Only state change — happens AFTER success
+
+    const expiryTime = new Date(sessionData.sessionExpiry).toLocaleTimeString();
+    console.log(`[Auth] Login successful. Session expires at ${expiryTime} (9 hours).`);
+
+    return sessionData;
   }, []);
 
   // ── logout ───────────────────────────────────────────────────────────────
@@ -214,19 +225,12 @@ export function AuthProvider({ children }) {
   }, []);
 
   // ── getIdToken ───────────────────────────────────────────────────────────
-  // Returns a guaranteed-fresh Firebase ID token (auto-refreshes if needed)
   const getIdToken = useCallback(async () => {
     return await getValidToken();
   }, []);
 
   // ── authHeaders ──────────────────────────────────────────────────────────
-  // ⚠️  THIS FUNCTION IS ASYNC — it MUST be awaited at every call site:
-  //
-  //       const headers = await authHeaders();
-  //       fetch(url, { headers: { 'Content-Type': 'application/json', ...headers } })
-  //
-  // Returns { Authorization: 'Bearer <token>' } or {} if no valid token.
-  // ─────────────────────────────────────────────────────────────────────────
+  // ⚠️  ASYNC — must be awaited at every call site
   const authHeaders = useCallback(async () => {
     const token = await getValidToken();
     if (!token) {
@@ -238,11 +242,10 @@ export function AuthProvider({ children }) {
 
   const value = {
     currentUser,
-    loading,
     login,
     logout,
     getIdToken,
-    authHeaders,          // async — MUST be awaited
+    authHeaders,
     isAuthenticated: !!currentUser,
     userRole: currentUser?.role || null,
   };

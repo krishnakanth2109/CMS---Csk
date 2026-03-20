@@ -4,26 +4,31 @@ import { useAuth } from '../context/AuthContext';
 import { Eye, EyeOff, ArrowRight, CheckCircle2, Loader2 } from 'lucide-react';
 
 export default function Login() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail]             = useState('');
+  const [password, setPassword]       = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [loading, setLoading]         = useState(false);
+  const [error, setError]             = useState('');
 
   const { login } = useAuth();
-  const navigate = useNavigate();
+  const navigate  = useNavigate();
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // getFriendlyError
+  //
+  // Firebase REST API error codes come in via err.code (set in AuthContext).
+  // Backend errors come in via err.message (plain string from JSON response).
+  //
+  // Both paths are handled here.
+  // ─────────────────────────────────────────────────────────────────────────
   const getFriendlyError = (err) => {
-    // err.code is set by AuthContext for Firebase REST API errors
-    // err.message is used for backend errors (e.g. "User not registered.")
-    const code = err.code || err.message || '';
+    const code = (err.code || err.message || '').toUpperCase();
 
-    // Firebase REST API returns these exact strings as the error message
     if (
       code.includes('INVALID_LOGIN_CREDENTIALS') ||
-      code.includes('INVALID_PASSWORD') ||
-      code.includes('EMAIL_NOT_FOUND') ||
-      code.includes('INVALID_EMAIL') ||
+      code.includes('INVALID_PASSWORD')          ||
+      code.includes('EMAIL_NOT_FOUND')           ||
+      code.includes('INVALID_EMAIL')             ||
       code.includes('WRONG_PASSWORD')
     ) return 'Invalid email or password.';
 
@@ -35,30 +40,49 @@ export default function Login() {
     if (code.includes('USER_DISABLED'))
       return 'This account has been disabled. Contact support.';
 
-    if (code.includes('NETWORK_REQUEST_FAILED') || code.includes('fetch'))
-      return 'Network error. Please check your connection.';
+    if (
+      code.includes('NETWORK_REQUEST_FAILED') ||
+      code.includes('FAILED TO FETCH')        ||
+      code.includes('NETWORKERROR')
+    ) return 'Network error. Please check your connection and try again.';
 
-    // Backend errors (e.g. "User not registered. Contact admin." / "Account deactivated.")
-    // These come through as err.message directly — just show them as-is
+    // Backend-specific messages — show them directly (they're user-safe strings)
+    // e.g. "User not registered. Contact admin." / "Account deactivated."
     return err.message || 'Something went wrong. Please try again.';
   };
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // handleSubmit
+  //
+  // Login.jsx fully owns the loading state. AuthContext.login() is a pure
+  // async function that throws on failure and resolves on success.
+  //
+  // Flow:
+  //   setLoading(true)
+  //   → await login()         (may throw)
+  //   → on success: navigate
+  //   → on error:  setError() → shown in UI
+  //   → finally:   setLoading(false) — safe because no AuthProvider re-render
+  // ─────────────────────────────────────────────────────────────────────────
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
+    setError('');    // clear any previous error
     setLoading(true);
 
     try {
       const user = await login(email, password);
-      
-      // ADMIN (Nainika) and MANAGER (Sanjay/Navya/Krishna) both go to dashboard
+
+      // Navigate based on role — admin & manager go to dashboard
       if (user?.role === 'admin' || user?.role === 'manager') {
         navigate('/admin');
       } else {
         navigate('/recruiter');
       }
-      
+
     } catch (err) {
+      // FIX: setError is called BEFORE setLoading(false) in finally.
+      // React batches both into ONE render, so the error banner
+      // appears at the same time the spinner disappears. No flash.
       setError(getFriendlyError(err));
     } finally {
       setLoading(false);
@@ -68,7 +92,7 @@ export default function Login() {
   return (
     <div className="min-h-screen w-full flex bg-white">
 
-      {/* Left Side: Branding */}
+      {/* ── Left Side: Branding ───────────────────────────────────────────── */}
       <div className="hidden lg:flex w-1/2 bg-zinc-900 relative overflow-hidden items-center justify-center p-12 text-white">
         <div
           className="absolute inset-0 bg-cover bg-center opacity-20"
@@ -113,7 +137,7 @@ export default function Login() {
         </div>
       </div>
 
-      {/* Right Side: Form */}
+      {/* ── Right Side: Form ──────────────────────────────────────────────── */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-white">
         <div className="w-full max-w-md space-y-8">
 
@@ -124,14 +148,17 @@ export default function Login() {
 
           <form onSubmit={handleSubmit} className="space-y-5">
 
-            {/* Error Banner */}
+            {/* ── Error Banner ── */}
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">
+              <div
+                role="alert"
+                className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded"
+              >
                 {error}
               </div>
             )}
 
-            {/* Email */}
+            {/* ── Email ── */}
             <div className="space-y-1.5">
               <label htmlFor="email" className="block text-sm font-medium text-zinc-700">
                 Email Address
@@ -141,14 +168,14 @@ export default function Login() {
                 type="email"
                 placeholder="name@company.com"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => { setEmail(e.target.value); setError(''); }}
                 required
                 disabled={loading}
                 className="w-full h-12 px-4 border border-zinc-200 bg-zinc-50 text-zinc-900 placeholder-zinc-400 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all disabled:opacity-50"
               />
             </div>
 
-            {/* Password */}
+            {/* ── Password ── */}
             <div className="space-y-1.5">
               <label htmlFor="password" className="block text-sm font-medium text-zinc-700">
                 Password
@@ -159,7 +186,7 @@ export default function Login() {
                   type={showPassword ? 'text' : 'password'}
                   placeholder="Enter your password"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => { setPassword(e.target.value); setError(''); }}
                   required
                   disabled={loading}
                   className="w-full h-12 px-4 pr-11 border border-zinc-200 bg-zinc-50 text-zinc-900 placeholder-zinc-400 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all disabled:opacity-50"
@@ -175,7 +202,7 @@ export default function Login() {
               </div>
             </div>
 
-            {/* Forgot password link */}
+            {/* ── Forgot password ── */}
             <div className="flex justify-end">
               <Link
                 to="/forgot-password"
@@ -185,7 +212,7 @@ export default function Login() {
               </Link>
             </div>
 
-            {/* Submit */}
+            {/* ── Submit ── */}
             <button
               type="submit"
               disabled={loading}
@@ -205,7 +232,7 @@ export default function Login() {
             </button>
           </form>
 
-          {/* Divider */}
+          {/* ── Footer ── */}
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
               <span className="w-full border-t border-zinc-200" />

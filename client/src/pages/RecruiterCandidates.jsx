@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
+import * as XLSX from 'xlsx';
 import {
   Plus, Search, Edit, Download, Phone, Mail,
   Building, Briefcase, Loader2, Ban, List, LayoutGrid,
@@ -527,22 +528,47 @@ export default function RecruiterCandidates() {
   }, [candidates, searchTerm, statusFilter, activeStatFilter]);
 
   const handleExport = () => {
-    if (getFilteredCandidates.length === 0) { toast({ title: "No data to export", variant: "destructive" }); return; }
-    const headers = ["Candidate ID", "Name", "Email", "Phone", "Client", "Position", "Status", "Total Exp", "Current CTC", "Expected CTC", "Skills", "Date Added"];
-    const escapeCsv = (str) => str ? `"${String(str).replace(/"/g, '""')}"` : '""';
-    const rows = getFilteredCandidates.map(c => [
-      escapeCsv(c.candidateId), escapeCsv(c.name), escapeCsv(c.email), escapeCsv(c.contact),
-      escapeCsv(c.client), escapeCsv(c.position), escapeCsv(Array.isArray(c.status) ? c.status.join(' | ') : c.status),
-      escapeCsv(c.totalExperience), escapeCsv(c.ctc), escapeCsv(c.ectc),
-      escapeCsv(Array.isArray(c.skills) ? c.skills.join(', ') : c.skills),
-      escapeCsv(new Date(c.dateAdded || c.createdAt || new Date()).toLocaleDateString())
-    ]);
-    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `candidates_export_${new Date().toISOString().split('T')[0]}.csv`;
-    link.click();
+    if (getFilteredCandidates.length === 0) {
+      toast({ title: "No data to export", variant: "destructive" });
+      return;
+    }
+
+    try {
+      const rows = getFilteredCandidates.map(c => ({
+        'Candidate ID':    c.candidateId || c._id?.slice(-6).toUpperCase() || '',
+        'Name':            c.name || '',
+        'Email':           c.email || '',
+        'Phone':           c.contact || '',
+        'Client':          c.client || '',
+        'Position':        c.position || '',
+        'Status':          Array.isArray(c.status) ? c.status.join(' | ') : (c.status || ''),
+        'Total Exp':       c.totalExperience || '',
+        'Current CTC':     c.ctc || '',
+        'Expected CTC':    c.ectc || '',
+        'Notice Period':   c.noticePeriod || '',
+        'Current Company': c.currentCompany || '',
+        'Location':        c.currentLocation || '',
+        'Skills':          Array.isArray(c.skills) ? c.skills.join(', ') : (c.skills || ''),
+        'Date Added':      (c.dateAdded || c.createdAt) ? new Date(c.dateAdded || c.createdAt).toLocaleDateString('en-GB') : '',
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(rows);
+
+      // Auto-size columns
+      const colWidths = Object.keys(rows[0] || {}).map(key => ({
+        wch: Math.max(key.length, ...rows.map(r => String(r[key] || '').length), 10)
+      }));
+      ws['!cols'] = colWidths;
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Candidates');
+      XLSX.writeFile(wb, `Candidates_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
+
+      toast({ title: 'Exported!', description: `${rows.length} candidate(s) exported to Excel.` });
+    } catch (err) {
+      console.error('Export error:', err);
+      toast({ title: 'Export failed', description: 'Could not export file.', variant: 'destructive' });
+    }
   };
 
   const getStatusBadgeVariant = (status) => {

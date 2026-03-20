@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Textarea } from '@/components/ui/textarea';
+import * as XLSX from 'xlsx';
 import {
   Search, Plus, Eye, Loader2, MessageCircle,
   ArrowUpDown, ArrowUp, ArrowDown, Users, Download,
@@ -702,51 +703,62 @@ export default function AdminCandidates() {
       return;
     }
 
-    const headers = [
-      'Candidate ID', 'First Name', 'Last Name', 'Full Name', 'Email', 'Contact', 'Alternate Contact',
-      'Role/Position', 'Client', 'Assigned Recruiter', 'Status', 'Current Location', 'Preferred Location',
-      'Total Experience', 'Relevant Experience', 'Current Company', 'Reason For Change',
-      'Current CTC', 'Current Take Home', 'Expected CTC', 'Expected Take Home',
-      'Notice Period', 'Serving Notice', 'LWD', 'Offers In Hand', 'Offer Package', 'Source', 'Skills'
-    ];
+    try {
+      const rows = filteredCandidates.map(c => {
+        const recruiterName = typeof c.recruiterId === 'object'
+          ? getRecruiterName(c.recruiterId)
+          : c.recruiterName || '';
 
-    const csvRows = [headers.join(',')];
-
-    filteredCandidates.forEach(c => {
-      const recruiterName = typeof c.recruiterId === 'object'
-        ? getRecruiterName(c.recruiterId)
-        : c.recruiterName || '';
-
-      const statusStr = Array.isArray(c.status) ? c.status.join(' | ') : (c.status || '');
-      const skillsStr = Array.isArray(c.skills) ? c.skills.join(' | ') : (c.skills || '');
-
-      const rowData = [
-        getCandidateId(c), c.firstName || '', c.lastName || '', c.name || '', c.email || '',
-        c.contact || '', c.alternateNumber || '', c.position || '', c.client || '',
-        recruiterName, statusStr, c.currentLocation || '', c.preferredLocation || '',
-        c.totalExperience || '', c.relevantExperience || '', c.currentCompany || '', c.reasonForChange || '',
-        c.ctc || '', c.currentTakeHome || '', c.ectc || '', c.expectedTakeHome || '',
-        c.noticePeriod || '', c.servingNoticePeriod ? 'Yes' : 'No',
-        c.lwd ? new Date(c.lwd).toLocaleDateString() : '', c.offersInHand ? 'Yes' : 'No',
-        c.offerPackage || '', c.source || '', skillsStr
-      ].map(val => {
-        const stringVal = String(val).replace(/"/g, '""');
-        return `"${stringVal}"`;
+        return {
+          'Candidate ID':      c.candidateId || c._id?.slice(-6).toUpperCase() || '',
+          'First Name':        c.firstName || '',
+          'Last Name':         c.lastName || '',
+          'Full Name':         c.name || '',
+          'Email':             c.email || '',
+          'Contact':           c.contact || '',
+          'Alternate Contact': c.alternateNumber || '',
+          'Position':          c.position || '',
+          'Client':            c.client || '',
+          'Recruiter':         recruiterName,
+          'Status':            Array.isArray(c.status) ? c.status.join(' | ') : (c.status || ''),
+          'Current Location':  c.currentLocation || '',
+          'Preferred Location': c.preferredLocation || '',
+          'Total Experience':  c.totalExperience || '',
+          'Relevant Experience': c.relevantExperience || '',
+          'Current Company':   c.currentCompany || '',
+          'Reason For Change': c.reasonForChange || '',
+          'Current CTC':       c.ctc || '',
+          'Current Take Home': c.currentTakeHome || '',
+          'Expected CTC':      c.ectc || '',
+          'Expected Take Home': c.expectedTakeHome || '',
+          'Notice Period':     c.noticePeriod || '',
+          'Serving Notice':    c.servingNoticePeriod ? 'Yes' : 'No',
+          'LWD':               c.lwd ? new Date(c.lwd).toLocaleDateString('en-GB') : '',
+          'Offers In Hand':    c.offersInHand ? 'Yes' : 'No',
+          'Offer Package':     c.offerPackage || '',
+          'Source':            c.source || '',
+          'Skills':            Array.isArray(c.skills) ? c.skills.join(' | ') : (c.skills || ''),
+          'Date Added':        (c.dateAdded || c.createdAt) ? new Date(c.dateAdded || c.createdAt).toLocaleDateString('en-GB') : '',
+        };
       });
 
-      csvRows.push(rowData.join(','));
-    });
+      const ws = XLSX.utils.json_to_sheet(rows);
 
-    const csvContent = csvRows.join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
+      // Auto-size columns based on content
+      const colWidths = Object.keys(rows[0] || {}).map(key => ({
+        wch: Math.max(key.length, ...rows.map(r => String(r[key] || '').length), 10)
+      }));
+      ws['!cols'] = colWidths;
 
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `Candidates_Export_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Candidates');
+      XLSX.writeFile(wb, `Candidates_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
+
+      toast({ title: 'Exported!', description: `${rows.length} candidate(s) exported to Excel.` });
+    } catch (err) {
+      console.error('Export error:', err);
+      toast({ title: 'Export failed', description: 'Could not export file.', variant: 'destructive' });
+    }
   };
 
   const handleSelectAll = (e) => {
