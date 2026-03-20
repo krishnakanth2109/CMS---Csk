@@ -53,24 +53,26 @@ export default function Login() {
 
   // ─────────────────────────────────────────────────────────────────────────
   // handleSubmit
-  //
-  // Login.jsx fully owns the loading state. AuthContext.login() is a pure
-  // async function that throws on failure and resolves on success.
-  //
-  // Flow:
-  //   setLoading(true)
-  //   → await login()         (may throw)
-  //   → on success: navigate
-  //   → on error:  setError() → shown in UI
-  //   → finally:   setLoading(false) — safe because no AuthProvider re-render
   // ─────────────────────────────────────────────────────────────────────────
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');    // clear any previous error
+    setError('');    
     setLoading(true);
 
+    // 1. Clean the email (removes accidental leading/trailing spaces)
+    const cleanEmail = email.trim();
+
+    // 2. Strict Email Validation: Ensures valid format and NO garbage characters after .com (or valid TLD)
+    const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailPattern.test(cleanEmail)) {
+      setError('Please enter a valid email address (e.g., name@company.com).');
+      setLoading(false);
+      return;
+    }
+
     try {
-      const user = await login(email, password);
+      // 3. Pass the cleaned and validated email to the login function
+      const user = await login(cleanEmail, password);
 
       // Navigate based on role — admin & manager go to dashboard
       if (user?.role === 'admin' || user?.role === 'manager') {
@@ -80,9 +82,6 @@ export default function Login() {
       }
 
     } catch (err) {
-      // FIX: setError is called BEFORE setLoading(false) in finally.
-      // React batches both into ONE render, so the error banner
-      // appears at the same time the spinner disappears. No flash.
       setError(getFriendlyError(err));
     } finally {
       setLoading(false);

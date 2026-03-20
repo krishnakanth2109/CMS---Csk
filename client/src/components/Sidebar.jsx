@@ -4,8 +4,7 @@ import { useAuth } from '@/context/AuthContext';
 import { 
   LayoutDashboard, UserPlus, Briefcase, 
   Building2, Receipt, ClipboardList, MessageSquare, 
-  BarChart3, Settings, Power, User, Users,
-  ChevronLeft, ChevronRight, Calendar 
+  BarChart3, Settings, Power, User, Users, Calendar 
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -70,8 +69,26 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
       <div className={clsx("flex flex-col h-screen fixed left-0 top-0 z-40 transition-all duration-300", sidebarBg, isOpen ? "w-80" : "w-20")}>
         
         {/* --- Toggle Button --- */}
-        <button onClick={toggleSidebar} className="absolute -right-3 top-12 bg-white text-[#283086] rounded-full p-1 shadow-md z-50 border border-gray-200">
-          {isOpen ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+        <button 
+          onClick={toggleSidebar} 
+          className="absolute -right-4 top-12 bg-white text-[#283086] rounded-lg p-1.5 shadow-md z-50 border border-gray-200 hover:bg-gray-50 transition-colors"
+          aria-label="Toggle Sidebar"
+        >
+          {isOpen ? (
+            // Collapse Icon (Left-pointing arrow with left border)
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="4" width="20" height="16" rx="4" ry="4" />
+              <line x1="8" y1="4" x2="8" y2="20" />
+              <polyline points="15 8 11 12 15 16" />
+            </svg>
+          ) : (
+            // Expand Icon (Right-pointing arrow with left border)
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="4" width="20" height="16" rx="4" ry="4" />
+              <line x1="8" y1="4" x2="8" y2="20" />
+              <polyline points="11 8 15 12 11 16" />
+            </svg>
+          )}
         </button>
 
         {/* --- Header / Logo --- */}
