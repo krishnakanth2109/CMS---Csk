@@ -18,6 +18,7 @@ import AdminClientInfo from '@/pages/AdminClientInfo';
 import AdminClientInvoice from '@/pages/AdminClientInvoice';
 import AdminRequirements from '@/pages/AdminRequirements';
 import AdminSchedules from '@/pages/AdminSchedules';
+import TeamsChat from '@/pages/TeamsChat';
 import AdminMessages from '@/pages/AdminMessages';
 import AdminReports from '@/pages/AdminReports';
 import AdminSettings from '@/pages/AdminSettings';
@@ -90,9 +91,10 @@ function AppRoutes() {
         <Route path="requirements" element={<AdminRequirements />} />
         <Route path="schedules" element={<AdminSchedules />} />
 
-        {/* ✅ Admin sees AdminMessages, Manager sees ManagerMessages */}
-        <Route path="messages" element={<AdminMessages />} />
-        <Route path="manager-messages" element={<ManagerMessages />} />
+        {/* ✅ All roles use TeamsChat via their role-specific wrappers */}
+        <Route path="messages" element={
+          userRole === 'manager' ? <ManagerMessages /> : <AdminMessages />
+        } />
 
         <Route path="reports" element={<AdminReports />} />
         <Route path="settings" element={<AdminSettings />} />

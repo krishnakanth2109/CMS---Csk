@@ -21,6 +21,7 @@ import clientRoutes    from './routes/clientRoutes.js';
 import jobRoutes       from './routes/jobRoutes.js';
 import interviewRoutes from './routes/interviewRoutes.js';
 import messageRoutes   from './routes/messageRoutes.js';
+import channelRoutes  from './routes/channelRoutes.js';
 
 // ── __dirname shim for ES Modules ─────────────────────────────────────────────
 const __filename = fileURLToPath(import.meta.url);
@@ -81,19 +82,54 @@ connectDB();
 io.on('connection', (socket) => {
   console.log(`⚡ Socket Connected: ${socket.id}`);
 
-  socket.on('join_room', (userId) => {
-    if (userId) {
-      socket.join(userId);
-      console.log(`👤 User joined room: ${userId}`);
+  // Join any room: userId for DMs, 'channel_<id>' for channel rooms
+  socket.on('join_room', (roomId) => {
+    if (roomId) {
+      socket.join(roomId);
+      console.log(`👤 Socket joined room: ${roomId}`);
     }
   });
 
-  socket.on('send_message', (data) => {
-    if (data.to === 'all') socket.broadcast.emit('receive_message', data);
-    else                   socket.to(data.to).emit('receive_message', data);
+  socket.on('leave_room', (roomId) => {
+    if (roomId) {
+      socket.leave(roomId);
+    }
   });
 
-  socket.on('disconnect', () => {});
+  // ── Legacy DM messages ──────────────────────────────────────────────────────
+  socket.on('send_message', (data) => {
+    if (data.to === 'all') {
+      socket.broadcast.emit('receive_message', data);
+    } else {
+      socket.to(data.to).emit('receive_message', data);
+    }
+  });
+
+  // ── Channel / Teams messages ────────────────────────────────────────────────
+  // data.to = 'channel_<channelId>'
+  // Broadcasts 'channel_message' to everyone in that channel room (except sender)
+  socket.on('channel_message', (data) => {
+    if (data.channelId) {
+      socket.to(`channel_${data.channelId}`).emit('channel_message', data);
+    }
+  });
+
+  // Broadcast channel lifecycle events to all connected clients
+  socket.on('channel_created', (channel) => {
+    socket.broadcast.emit('channel_created', channel);
+  });
+
+  socket.on('channel_updated', (channel) => {
+    socket.broadcast.emit('channel_updated', channel);
+  });
+
+  socket.on('channel_deleted', (payload) => {
+    socket.broadcast.emit('channel_deleted', payload);
+  });
+
+  socket.on('disconnect', () => {
+    console.log(`⚡ Socket Disconnected: ${socket.id}`);
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -106,6 +142,7 @@ app.use('/api/clients',    clientRoutes);
 app.use('/api/jobs',       jobRoutes);
 app.use('/api/interviews', interviewRoutes);
 app.use('/api/messages',   messageRoutes);
+app.use('/api/channels',   channelRoutes);
 
 // Fallback routes (legacy support)
 app.use('/auth',       authRoutes);
@@ -115,6 +152,7 @@ app.use('/clients',    clientRoutes);
 app.use('/jobs',       jobRoutes);
 app.use('/interviews', interviewRoutes);
 app.use('/messages',   messageRoutes);
+app.use('/channels',   channelRoutes);
 
 app.get('/', (_req, res) => {
   res.json({ message: 'API is running with Socket.IO & File Uploads...' });
