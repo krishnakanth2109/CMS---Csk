@@ -159,35 +159,64 @@ app.get('/', (_req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// GET /api/reports  — Admin (Nainika) & Manager (Sanjay/Krishna/Navya) dashboard
+// GET /api/reports  — Admin & Manager dashboard
+// FIX: status is stored as an ARRAY — use hasStatus() for all checks
 // ═══════════════════════════════════════════════════════════════════════════════
 app.get('/api/reports', protect, authorize('admin', 'manager'), async (req, res) => {
   try {
-    const { filter = 'month' } = req.query;
+    const { filter = 'all', date, month, week } = req.query;
 
     const now = new Date();
-    let startDate = null;
-    if (filter === 'day') {
-      startDate = new Date(now); startDate.setHours(0, 0, 0, 0);
+    let dateQuery = {};
+    if (date) {
+      // FIX: Parse YYYY-MM-DD manually — new Date("YYYY-MM-DD") uses UTC midnight
+      // which in IST (UTC+5:30) misses candidates from 00:00–05:29 local time.
+      const [yyyy, mm, dd] = date.split('-').map(Number);
+      const s = new Date(yyyy, mm - 1, dd, 0, 0, 0, 0);
+      const e = new Date(yyyy, mm - 1, dd, 23, 59, 59, 999);
+      dateQuery = { createdAt: { $gte: s, $lte: e } };
+    } else if (filter === 'day') {
+      const s = new Date(now); s.setHours(0, 0, 0, 0);
+      dateQuery = { createdAt: { $gte: s } };
     } else if (filter === 'week') {
-      startDate = new Date(now); startDate.setDate(now.getDate() - 7);
+      const s = new Date(now); s.setDate(now.getDate() - 7);
+      dateQuery = { createdAt: { $gte: s } };
     } else if (filter === 'month') {
-      startDate = new Date(now); startDate.setMonth(now.getMonth() - 1);
+      // If specific month index provided, use that month; otherwise last 30 days
+      if (month !== undefined) {
+        const mIdx = parseInt(month);
+        const yr   = mIdx > now.getMonth() ? now.getFullYear() - 1 : now.getFullYear();
+        const s    = new Date(yr, mIdx, 1, 0, 0, 0, 0);
+        const e    = new Date(yr, mIdx + 1, 0, 23, 59, 59, 999);
+        dateQuery  = { createdAt: { $gte: s, $lte: e } };
+      } else {
+        const s = new Date(now); s.setMonth(now.getMonth() - 1);
+        dateQuery = { createdAt: { $gte: s } };
+      }
     }
-
-    const dateQuery = startDate ? { createdAt: { $gte: startDate } } : {};
+    // filter === 'all' → no date restriction
 
     const INTERVIEW_STAGES = [
-      'L1 Interview', 'L2 Interview', 'Final Interview',
-      'Technical Interview', 'HR Interview', 'Interview',
+      'L1 Interview','L2 Interview','L3 Interview','L4 Interview','L5 Interview',
+      'Final Interview','Technical Round','Technical Interview','HR Round','HR Interview','Interview',
     ];
+
+    // status is an ARRAY in MongoDB — helper to check membership
+    const hasStatus = (c, s) => {
+      const arr = Array.isArray(c.status) ? c.status : [c.status || ''];
+      return arr.includes(s);
+    };
+    const hasAnyInterview = (c) => {
+      const arr = Array.isArray(c.status) ? c.status : [c.status || ''];
+      return arr.some(s => INTERVIEW_STAGES.includes(s));
+    };
 
     const candidates = await Candidate.find(dateQuery)
       .select('status recruiterId recruiterName createdAt')
       .lean();
 
-    const totalSelected    = candidates.filter(c => c.status === 'Offer').length;
-    const totalJoined      = candidates.filter(c => c.status === 'Joined').length;
+    const totalSelected    = candidates.filter(c => hasStatus(c, 'Selected')).length;
+    const totalJoined      = candidates.filter(c => hasStatus(c, 'Joined')).length;
     const conversionNum    = totalSelected > 0 ? Math.round((totalJoined / totalSelected) * 100) : 0;
     const activeRecruiters = await User.countDocuments({ role: 'recruiter', active: true });
 
@@ -200,9 +229,9 @@ app.get('/api/reports', protect, authorize('admin', 'manager'), async (req, res)
       }
       const row = recruiterMap.get(key);
       row.Submissions += 1;
-      if (INTERVIEW_STAGES.includes(c.status)) row.Turnups  += 1;
-      if (c.status === 'Offer')                row.Selected += 1;
-      if (c.status === 'Joined')               row.Joined   += 1;
+      if (hasAnyInterview(c))      row.Turnups  += 1;
+      if (hasStatus(c, 'Selected')) row.Selected += 1;
+      if (hasStatus(c, 'Joined'))   row.Joined   += 1;
     }
     const recruiterPerformance = Array.from(recruiterMap.values())
       .sort((a, b) => b.Submissions - a.Submissions);
@@ -213,12 +242,16 @@ app.get('/api/reports', protect, authorize('admin', 'manager'), async (req, res)
       const d     = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const start = new Date(d.getFullYear(), d.getMonth(), 1);
       const end   = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
-      const monthCands = await Candidate.find({ createdAt: { $gte: start, $lte: end } })
+      const mC    = await Candidate.find({ createdAt: { $gte: start, $lte: end } })
         .select('status').lean();
+      const mHas  = (c, s) => (Array.isArray(c.status) ? c.status : [c.status||'']).includes(s);
       monthlyData.push({
         month:      MONTHS[d.getMonth()],
-        candidates: monthCands.length,
-        joined:     monthCands.filter(c => c.status === 'Joined').length,
+        candidates: mC.length,
+        joined:     mC.filter(c => mHas(c, 'Joined')).length,
+        selected:   mC.filter(c => mHas(c, 'Selected')).length,
+        rejected:   mC.filter(c => mHas(c, 'Rejected')).length,
+        hold:       mC.filter(c => mHas(c, 'Hold')).length,
       });
     }
 
@@ -235,87 +268,119 @@ app.get('/api/reports', protect, authorize('admin', 'manager'), async (req, res)
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // GET /api/reports/recruiter — Per-recruiter own stats
+// FIX: status is an ARRAY — use hasStatus() for all checks
+//      Weekly: rolling last 4 weeks (not current-month-only) so historical data shows
+//      Monthly: last 12 months (not 6) so older candidates are visible
 // ═══════════════════════════════════════════════════════════════════════════════
 app.get('/api/reports/recruiter', protect, async (req, res) => {
   try {
     const recruiterId = req.user._id;
 
     const INTERVIEW_STAGES = new Set([
-      'L1 Interview', 'L2 Interview', 'Final Interview',
-      'Technical Interview', 'HR Interview', 'Interview',
+      'L1 Interview','L2 Interview','L3 Interview','L4 Interview','L5 Interview',
+      'Final Interview','Technical Round','Technical Interview','HR Round','HR Interview','Interview',
     ]);
 
-    const all = await Candidate.find({ recruiterId })
+    // Fetch ALL candidates for this recruiter (both _id and recruiterName match)
+    const all = await Candidate.find({
+      $or: [
+        { recruiterId: recruiterId },
+        { recruiterId: recruiterId.toString() },
+      ]
+    })
       .select('status createdAt')
       .lean();
 
-    const totalSubmissions         = all.length;
-    const totalInterviewsScheduled = all.filter(c => INTERVIEW_STAGES.has(c.status)).length;
-    const offers                   = all.filter(c => c.status === 'Offer').length;
-    const joined                   = all.filter(c => c.status === 'Joined').length;
-    const rejected                 = all.filter(c => c.status === 'Rejected').length;
-    const successRate              = totalSubmissions > 0
-      ? Math.round((joined / totalSubmissions) * 100)
-      : 0;
-
-    const statusCounts = {};
-    for (const c of all) {
-      const s = c.status || 'Unknown';
-      statusCounts[s] = (statusCounts[s] || 0) + 1;
-    }
-    const STATUS_COLORS = {
-      'Submitted':           '#3b82f6',
-      'Pending':             '#f59e0b',
-      'L1 Interview':        '#8b5cf6',
-      'L2 Interview':        '#a855f7',
-      'Final Interview':     '#c084fc',
-      'Technical Interview': '#7c3aed',
-      'HR Interview':        '#6d28d9',
-      'Interview':           '#9333ea',
-      'Offer':               '#22c55e',
-      'Joined':              '#16a34a',
-      'Rejected':            '#ef4444',
+    // status is stored as an ARRAY — always use these helpers
+    const hasStatus = (c, s) => {
+      const arr = Array.isArray(c.status) ? c.status : [c.status || ''];
+      return arr.includes(s);
     };
-    const statusData = Object.entries(statusCounts).map(([name, value]) => ({
-      name, value, color: STATUS_COLORS[name] || '#94a3b8',
-    }));
+    const hasAnyInterview = (c) => {
+      const arr = Array.isArray(c.status) ? c.status : [c.status || ''];
+      return arr.some(s => INTERVIEW_STAGES.has(s));
+    };
 
+    const totalSubmissions         = all.length;
+    const totalInterviewsScheduled = all.filter(c => hasAnyInterview(c)).length;
+    const joined                   = all.filter(c => hasStatus(c, 'Joined')).length;
+    const selected                 = all.filter(c => hasStatus(c, 'Selected')).length;
+    const rejected                 = all.filter(c => hasStatus(c, 'Rejected')).length;
+    const hold                     = all.filter(c => hasStatus(c, 'Hold')).length;
+    const successRate              = totalSubmissions > 0
+      ? Math.round((joined / totalSubmissions) * 100) : 0;
+
+    // ── W1–W4: rolling last 4 weeks backwards from today ────────────────────
+    // W1 = 3 weeks ago, W2 = 2 weeks ago, W3 = last week, W4 = this week
+    // This covers historical data regardless of what month candidates were added in.
     const now        = new Date();
     const weeklyData = [];
-    for (let i = 3; i >= 0; i--) {
-      const weekStart = new Date(now);
-      weekStart.setDate(now.getDate() - (i + 1) * 7);
-      weekStart.setHours(0, 0, 0, 0);
-      const weekEnd = new Date(now);
-      weekEnd.setDate(now.getDate() - i * 7);
-      weekEnd.setHours(23, 59, 59, 999);
 
-      const weekCands = all.filter(c => {
+    for (let w = 3; w >= 0; w--) {
+      // End of this week-slot
+      const wEnd = new Date(now);
+      wEnd.setDate(now.getDate() - w * 7);
+      wEnd.setHours(23, 59, 59, 999);
+
+      // Start = 6 days before wEnd
+      const wStart = new Date(wEnd);
+      wStart.setDate(wEnd.getDate() - 6);
+      wStart.setHours(0, 0, 0, 0);
+
+      const wC = all.filter(c => {
         const d = new Date(c.createdAt);
-        return d >= weekStart && d <= weekEnd;
+        return d >= wStart && d <= wEnd;
       });
 
       weeklyData.push({
-        week:       `W${4 - i}`,
-        submitted:  weekCands.length,
-        interviews: weekCands.filter(c => INTERVIEW_STAGES.has(c.status)).length,
-        offers:     weekCands.filter(c => c.status === 'Offer').length,
-        joined:     weekCands.filter(c => c.status === 'Joined').length,
+        week:       `W${4 - w}`,
+        submitted:  wC.length,
+        interviews: wC.filter(c => hasAnyInterview(c)).length,
+        selected:   wC.filter(c => hasStatus(c, 'Selected')).length,
+        rejected:   wC.filter(c => hasStatus(c, 'Rejected')).length,
+        hold:       wC.filter(c => hasStatus(c, 'Hold')).length,
+        joined:     wC.filter(c => hasStatus(c, 'Joined')).length,
       });
+    }
+
+    // ── 12-month breakdown — covers up to a full year of history ────────────
+    // Only includes months that have data OR the standard last 6 months
+    const MONTHS      = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const monthlyData = [];
+    for (let i = 11; i >= 0; i--) {
+      const d      = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const mStart = new Date(d.getFullYear(), d.getMonth(), 1);
+      const mEnd   = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
+      const mC     = all.filter(c => {
+        const cd = new Date(c.createdAt);
+        return cd >= mStart && cd <= mEnd;
+      });
+      // Include month if it has data OR it's within the last 6 months
+      if (mC.length > 0 || i < 6) {
+        monthlyData.push({
+          month:      MONTHS[d.getMonth()],
+          submitted:  mC.length,
+          interviews: mC.filter(c => hasAnyInterview(c)).length,
+          selected:   mC.filter(c => hasStatus(c, 'Selected')).length,
+          rejected:   mC.filter(c => hasStatus(c, 'Rejected')).length,
+          hold:       mC.filter(c => hasStatus(c, 'Hold')).length,
+          joined:     mC.filter(c => hasStatus(c, 'Joined')).length,
+        });
+      }
     }
 
     res.json({
       stats: {
         totalSubmissions,
-        activeInterviews:         totalInterviewsScheduled,
         totalInterviewsScheduled,
-        offers,
         joined,
+        selected,
         rejected,
+        hold,
         successRate,
       },
-      statusData,
       weeklyData,
+      monthlyData,
     });
   } catch (error) {
     console.error('[Reports] /api/reports/recruiter error:', error.message);

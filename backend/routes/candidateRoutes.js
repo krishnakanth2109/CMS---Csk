@@ -125,12 +125,18 @@ router.get('/', async (req, res) => {
     }
 
     if (req.query.date) {
-      const start = new Date(req.query.date); start.setHours(0, 0, 0, 0);
-      const end   = new Date(req.query.date); end.setHours(23, 59, 59, 999);
+      // FIX: Parse YYYY-MM-DD manually to treat as LOCAL date, not UTC.
+      // new Date("2026-03-21") parses as UTC midnight, which in IST (UTC+5:30)
+      // = 5:30 AM — missing all candidates added before 5:30 AM local time.
+      const [yyyy, mm, dd] = req.query.date.split('-').map(Number);
+      const start = new Date(yyyy, mm - 1, dd, 0, 0, 0, 0);
+      const end   = new Date(yyyy, mm - 1, dd, 23, 59, 59, 999);
       query.createdAt = { $gte: start, $lte: end };
     } else if (req.query.startDate && req.query.endDate) {
-      const start = new Date(req.query.startDate); start.setHours(0, 0, 0, 0);
-      const end   = new Date(req.query.endDate);   end.setHours(23, 59, 59, 999);
+      const [sy, sm, sd] = req.query.startDate.split('-').map(Number);
+      const [ey, em, ed] = req.query.endDate.split('-').map(Number);
+      const start = new Date(sy, sm - 1, sd, 0, 0, 0, 0);
+      const end   = new Date(ey, em - 1, ed, 23, 59, 59, 999);
       query.createdAt = { $gte: start, $lte: end };
     }
 
