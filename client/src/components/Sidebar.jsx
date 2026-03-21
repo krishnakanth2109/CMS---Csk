@@ -28,7 +28,7 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
     { name: 'Invoices',           path: '/admin/invoices',          icon: Receipt },
     { name: 'Requirements',       path: '/admin/requirements',      icon: ClipboardList },
     { name: 'Schedules',          path: '/admin/schedules',         icon: Calendar },
-    { name: 'Messages',           path: '/admin/manager-messages',  icon: MessageSquare },
+    { name: 'Messages',           path: '/admin/messages',  icon: MessageSquare },
     { name: 'Reports',            path: '/admin/reports',           icon: BarChart3 },
     { name: 'Settings',           path: '/admin/settings',          icon: Settings }, 
   ];
