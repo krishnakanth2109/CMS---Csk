@@ -372,6 +372,15 @@ export default function AdminClientInfo() {
               <input name="clientLocation" value={form.clientLocation} onChange={handleChange} placeholder="City, State" className={inputCls} />
             </div>
             <div>
+              <label className="block text-xs font-medium text-zinc-500 mb-1">GST Number</label>
+              <input name="gstNumber" value={form.gstNumber} onChange={handleChange} placeholder="e.g. 22AAAAA0000A1Z5" className={`${inputCls} ${errors.gstNumber ? 'border-red-500' : ''}`} />
+              {errors.gstNumber && <p className="text-xs text-red-500 mt-1">{errors.gstNumber}</p>}
+            </div>
+            <div className="md:col-span-3">
+              <label className="block text-xs font-medium text-zinc-500 mb-1">Address</label>
+              <textarea name="address" value={form.address} onChange={handleChange} placeholder="Full address..." rows={2} className={`${inputCls} resize-none`} />
+            </div>
+            <div>
               <label className="block text-xs font-medium text-zinc-500 mb-1">Locking Period</label>
               <input name="lockingPeriod" value={form.lockingPeriod} onChange={handleChange} placeholder="e.g. 30" className={`${inputCls} ${errors.lockingPeriod ? 'border-red-500' : ''}`} />
               {errors.lockingPeriod && <p className="text-xs text-red-500 mt-1">{errors.lockingPeriod}</p>}
