@@ -117,6 +117,15 @@ export default function AdminCandidates() {
   const [sortConfig, setSortConfig] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]);
 
+  // --- Pagination States ---
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 100;
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter, recruiterFilter, clientFilter, activeStatFilter]);
+
   // Bulk Assign States
   const [bulkRecruiterId, setBulkRecruiterId] = useState('');
   const [isBulkAssigning, setIsBulkAssigning] = useState(false);
@@ -696,6 +705,13 @@ export default function AdminCandidates() {
     };
   }, [candidates]);
 
+  // --- PAGINATION LOGIC ---
+  const totalPages = Math.ceil(filteredCandidates.length / ITEMS_PER_PAGE);
+  const paginatedCandidates = filteredCandidates.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
   // ── Export functionality ──────────────────────────────────────────────────
   const handleExportExcel = () => {
     if (filteredCandidates.length === 0) {
@@ -945,7 +961,7 @@ export default function AdminCandidates() {
               </div>
 
               {/* TABLE CONTAINER */}
-              <div ref={bottomScrollRef} onScroll={handleBottomScroll} className="tbl-scroll rounded-b-xl w-full" style={{ overflowX: 'auto' }}>
+              <div ref={bottomScrollRef} onScroll={handleBottomScroll} className="tbl-scroll w-full" style={{ overflowX: 'auto' }}>
                 <table className="w-full text-sm text-left border-collapse min-w-[1800px]">
                   <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
                     <tr>
@@ -973,7 +989,8 @@ export default function AdminCandidates() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {filteredCandidates.map((c) => {
+                    {/* Render Paginated Candidates */}
+                    {paginatedCandidates.map((c) => {
                       const statusArr = Array.isArray(c.status) ? c.status : [c.status || 'Submitted'];
                       const isSelected = selectedIds.includes(c._id);
                       return (
@@ -1029,6 +1046,34 @@ export default function AdminCandidates() {
                   <div className="text-center py-12 text-slate-500">No candidates match your search filters.</div>
                 )}
               </div>
+              
+              {/* --- PAGINATION CONTROLS --- */}
+              {totalPages > 1 && (
+                <div className="flex flex-col sm:flex-row justify-between items-center p-4 border-t border-slate-200 bg-white gap-4">
+                  <span className="text-sm text-slate-500">
+                    Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, filteredCandidates.length)} of {filteredCandidates.length} entries
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      disabled={currentPage === 1}
+                      onClick={() => setCurrentPage(p => p - 1)}
+                      className="px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                    >
+                      Previous
+                    </button>
+                    <span className="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded-lg">
+                      Page {currentPage} of {totalPages}
+                    </span>
+                    <button
+                      disabled={currentPage === totalPages}
+                      onClick={() => setCurrentPage(p => p + 1)}
+                      className="px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>

@@ -278,16 +278,12 @@ export default function RecruiterDashboard() {
           <ProfessionalStatCard title="INTERVIEWS"         value={interviewStats.totalInterviews}  icon={ClipboardList} trend={3} bgColor="bg-indigo-100"  textColor="text-indigo-600"  onClick={handleNavigateToSchedules} />
           <ProfessionalStatCard title="AVG. TIME TO HIRE"  value={`${candidateStats.successRate}%`} icon={TrendingUp}  trend={0}  bgColor="bg-fuchsia-100" textColor="text-fuchsia-600" />
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <ProfessionalStatCard title="SELECTED" value={candidateStats.selected} icon={UserCheck} trend={12} bgColor="bg-purple-100" textColor="text-purple-600" onClick={() => handleNavigateToCandidates('Selected')} />
           <ProfessionalStatCard title="REJECTED" value={candidateStats.rejected} icon={XCircle}   trend={5}  bgColor="bg-red-100"    textColor="text-red-600"    onClick={() => handleNavigateToCandidates('Rejected')} />
           <ProfessionalStatCard title="HOLD"     value={candidateStats.hold}     icon={Clock}     trend={4}  bgColor="bg-orange-100" textColor="text-orange-600" onClick={() => handleNavigateToCandidates('Hold')} />
           <ProfessionalStatCard title="BACKOUTS" value={candidateStats.backout}  icon={UserMinus} trend={-1} bgColor="bg-rose-100"   textColor="text-rose-600"   onClick={() => handleNavigateToCandidates('Backout')} />
-        </div>
-        {/* FIX: Removed the orphaned 5th card row that had only "JOINED" —
-            merged it into the 4-card grid above for visual balance. */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <ProfessionalStatCard title="JOINED" value={candidateStats.joined} icon={Users} trend={7} bgColor="bg-green-100" textColor="text-green-600" onClick={() => handleNavigateToCandidates('Joined')} />
+          <ProfessionalStatCard title="JOINED"   value={candidateStats.joined}   icon={Users}     trend={7}  bgColor="bg-green-100"  textColor="text-green-600"  onClick={() => handleNavigateToCandidates('Joined')} />
         </div>
 
         {/* ── Chart ── */}

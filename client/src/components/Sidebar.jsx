@@ -4,7 +4,8 @@ import { useAuth } from '@/context/AuthContext';
 import { 
   LayoutDashboard, UserPlus, Briefcase, 
   Building2, Receipt, ClipboardList, MessageSquare, 
-  BarChart3, Settings, Power, User, Users, Calendar 
+  BarChart3, Settings, Power, User, Users, Calendar,
+  Video, FileText // <-- Added missing imports here
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -28,7 +29,10 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
     { name: 'Invoices',           path: '/admin/invoices',          icon: Receipt },
     { name: 'Requirements',       path: '/admin/requirements',      icon: ClipboardList },
     { name: 'Schedules',          path: '/admin/schedules',         icon: Calendar },
-    { name: 'Messages',           path: '/admin/messages',  icon: MessageSquare },
+    { name: 'Messages',           path: '/admin/messages',          icon: MessageSquare },
+    // External links added here
+    { name: 'Mock Interviews',    isExternal: true, url: 'https://ai-adaptive-interview-k6md3h5l7-oragantisagar041s-projects.vercel.app/admin.html',   icon: Video },
+    { name: 'Offer Letters',      isExternal: true, url: 'https://automated-offer-letter-generator-mocha.vercel.app/?jr_id=l_4387424181',     icon: FileText }, 
     { name: 'Reports',            path: '/admin/reports',           icon: BarChart3 },
     { name: 'Settings',           path: '/admin/settings',          icon: Settings }, 
   ];
@@ -57,6 +61,9 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
       { name: 'Requirements',       path: '/admin/requirements',  icon: ClipboardList },
       { name: 'Schedules',          path: '/admin/schedules',     icon: Calendar },
       { name: 'Messages',           path: '/admin/messages',      icon: MessageSquare },
+      // External links added for admin as well
+      { name: 'Mock Interviews',    isExternal: true, url: 'https://ai-adaptive-interview-k6md3h5l7-oragantisagar041s-projects.vercel.app/admin.html',   icon: Video },
+      { name: 'Offer Letters',      isExternal: true, url: 'https://automated-offer-letter-generator-mocha.vercel.app/?jr_id=l_4387424181',     icon: FileText }, 
       { name: 'Reports',            path: '/admin/reports',       icon: BarChart3 },
       { name: 'Settings',           path: '/admin/settings',      icon: Settings },
     ];
@@ -75,14 +82,12 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
           aria-label="Toggle Sidebar"
         >
           {isOpen ? (
-            // Collapse Icon (Left-pointing arrow with left border)
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <rect x="2" y="4" width="20" height="16" rx="4" ry="4" />
               <line x1="8" y1="4" x2="8" y2="20" />
               <polyline points="15 8 11 12 15 16" />
             </svg>
           ) : (
-            // Expand Icon (Right-pointing arrow with left border)
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <rect x="2" y="4" width="20" height="16" rx="4" ry="4" />
               <line x1="8" y1="4" x2="8" y2="20" />
@@ -105,7 +110,7 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
         <div className={clsx("mb-2 transition-all duration-300", isOpen ? "px-6" : "px-2")}>
           <div className={clsx("bg-white/10 backdrop-blur-md rounded-full flex items-center overflow-hidden border border-white/10 transition-all", isOpen ? "p-3 gap-4" : "p-2 justify-center")}>
             <div className="w-10 h-10 rounded-full border-2 border-white/20 flex-shrink-0 overflow-hidden bg-gray-200">
-               {currentUser?.profilePicture ? <img src={currentUser.profilePicture} className="w-full h-full object-cover" /> : <User className="h-full w-full p-2 text-gray-500" />}
+               {currentUser?.profilePicture ? <img src={currentUser.profilePicture} className="w-full h-full object-cover" alt="Profile" /> : <User className="h-full w-full p-2 text-gray-500" />}
             </div>
             {isOpen && (
               <div className="flex-1 min-w-0">
@@ -120,52 +125,77 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
 
         {/* --- Navigation Links --- */}
         <div className={clsx("flex-1 overflow-y-auto space-y-1 pt-8 pb-8 pr-0 relative [&::-webkit-scrollbar]:hidden", isOpen ? "pl-6" : "pl-2")}>
-          {links.map((link) => (
-            <NavLink
-              key={link.path}
-              to={link.path}
-              end={link.path === '/admin' || link.path === '/recruiter'}
-              className={({ isActive }) =>
-                clsx(
-                  "group flex items-center relative py-4 select-none outline-none focus:outline-none focus:ring-0",
-                  isActive
-                    ? `${activeBgClass} ${activeTextClass}`
-                    : `${inactiveTextClass} transition-colors duration-200`,
-                  isOpen ? "pl-8 rounded-l-[40px]" : "justify-center pl-0 rounded-xl mx-2"
-                )
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  {isActive && isOpen && (
-                    <>
-                      <div
-                        className="absolute right-0 -top-[30px] w-[30px] h-[30px] bg-transparent pointer-events-none"
-                        style={{
-                          borderBottomRightRadius: '30px',
-                          boxShadow: `15px 15px 0 15px ${mainBackgroundColor}`,
-                        }}
-                      />
-                      <div
-                        className="absolute right-0 -bottom-[30px] w-[30px] h-[30px] bg-transparent pointer-events-none"
-                        style={{
-                          borderTopRightRadius: '30px',
-                          boxShadow: `15px -15px 0 15px ${mainBackgroundColor}`,
-                        }}
-                      />
-                    </>
+          {links.map((link) => {
+            // Handle External Links (Opens in new tab)
+            if (link.isExternal) {
+              return (
+                <a
+                  key={link.name}
+                  href={link.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={clsx(
+                    "group flex items-center relative py-4 select-none outline-none focus:outline-none focus:ring-0",
+                    `${inactiveTextClass} transition-colors duration-200`,
+                    isOpen ? "pl-8 rounded-l-[40px]" : "justify-center pl-0 rounded-xl mx-2"
                   )}
+                >
                   <div className={clsx("flex items-center z-20 relative", isOpen ? "gap-5" : "gap-0")}>
-                    <link.icon className={clsx(
-                      "h-5 w-5",
-                      isActive ? "scale-110 stroke-[3px]" : "stroke-[2.5px]"
-                    )} />
+                    <link.icon className="h-5 w-5 stroke-[2.5px]" />
                     {isOpen && <span className="text-[15px] tracking-wide whitespace-nowrap">{link.name}</span>}
                   </div>
-                </>
-              )}
-            </NavLink>
-          ))}
+                </a>
+              );
+            }
+
+            // Handle Internal React Router Links
+            return (
+              <NavLink
+                key={link.path}
+                to={link.path}
+                end={link.path === '/admin' || link.path === '/recruiter'}
+                className={({ isActive }) =>
+                  clsx(
+                    "group flex items-center relative py-4 select-none outline-none focus:outline-none focus:ring-0",
+                    isActive
+                      ? `${activeBgClass} ${activeTextClass}`
+                      : `${inactiveTextClass} transition-colors duration-200`,
+                    isOpen ? "pl-8 rounded-l-[40px]" : "justify-center pl-0 rounded-xl mx-2"
+                  )
+                }
+              >
+                {({ isActive }) => (
+                  <>
+                    {isActive && isOpen && (
+                      <>
+                        <div
+                          className="absolute right-0 -top-[30px] w-[30px] h-[30px] bg-transparent pointer-events-none"
+                          style={{
+                            borderBottomRightRadius: '30px',
+                            boxShadow: `15px 15px 0 15px ${mainBackgroundColor}`,
+                          }}
+                        />
+                        <div
+                          className="absolute right-0 -bottom-[30px] w-[30px] h-[30px] bg-transparent pointer-events-none"
+                          style={{
+                            borderTopRightRadius: '30px',
+                            boxShadow: `15px -15px 0 15px ${mainBackgroundColor}`,
+                          }}
+                        />
+                      </>
+                    )}
+                    <div className={clsx("flex items-center z-20 relative", isOpen ? "gap-5" : "gap-0")}>
+                      <link.icon className={clsx(
+                        "h-5 w-5",
+                        isActive ? "scale-110 stroke-[3px]" : "stroke-[2.5px]"
+                      )} />
+                      {isOpen && <span className="text-[15px] tracking-wide whitespace-nowrap">{link.name}</span>}
+                    </div>
+                  </>
+                )}
+              </NavLink>
+            );
+          })}
         </div>
 
         {/* --- Sign Out Button --- */}

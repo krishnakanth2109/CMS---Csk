@@ -115,6 +115,15 @@ export default function RecruiterCandidates() {
   const [activeStatFilter, setActiveStatFilter] = useState(null);
   const [selectedCandidates, setSelectedCandidates] = useState([]);
 
+  // --- PAGINATION STATES ---
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 50;
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter, activeStatFilter]);
+
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
@@ -186,7 +195,6 @@ export default function RecruiterCandidates() {
   const [formData, setFormData] = useState(initialFormState);
 
   const checkEmailDuplicate = async (email) => {
-    // 🔴 Updated Regex for valid TLD check
     if (!email || !/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email.trim())) return;
     setIsCheckingEmail(true);
     try {
@@ -203,10 +211,7 @@ export default function RecruiterCandidates() {
           email: `A candidate with this email already exists (ID: ${data.candidateId}${data.name ? ' — ' + data.name : ''})`,
         }));
       }
-    } catch (_) {
-    } finally {
-      setIsCheckingEmail(false);
-    }
+    } catch (_) { } finally { setIsCheckingEmail(false); }
   };
 
   const checkPhoneDuplicate = async (phone) => {
@@ -227,10 +232,7 @@ export default function RecruiterCandidates() {
           contact: `A candidate with this phone already exists (ID: ${data.candidateId}${data.name ? ' — ' + data.name : ''})`,
         }));
       }
-    } catch (_) {
-    } finally {
-      setIsCheckingPhone(false);
-    }
+    } catch (_) { } finally { setIsCheckingPhone(false); }
   };
 
   const handleResumeUpload = async (event) => {
@@ -266,40 +268,30 @@ export default function RecruiterCandidates() {
 
       const result = await response.json();
 
-      if (!response.ok || !result.success) {
-        throw new Error(result.message || 'Failed to parse resume');
-      }
+      if (!response.ok || !result.success) throw new Error(result.message || 'Failed to parse resume');
 
       if (result.success && result.data) {
         const cleanContact = result.data.contact ? result.data.contact.replace(/\D/g, '').slice(0, 10) : '';
         const cleanTotalExp = result.data.totalExperience ? String(result.data.totalExperience).replace(/[^0-9.]/g, '') : '';
-
         const parsedName = result.data.name || '';
         const nameParts = parsedName.trim().split(/\s+/);
         const parsedFirst = nameParts[0] || '';
         const parsedLast = nameParts.slice(1).join(' ') || '';
         setFormData(prev => ({
           ...prev,
-          firstName: prev.firstName || parsedFirst,
-          lastName: prev.lastName || parsedLast,
-          email: prev.email || result.data.email || '',
-          contact: prev.contact || cleanContact || '',
-          linkedin: prev.linkedin || result.data.linkedin || '',
-          gender: prev.gender || result.data.gender || 'Not Specified',
-          skills: prev.skills || result.data.skills || '',
-          totalExperience: prev.totalExperience || cleanTotalExp || '',
-          education: prev.education || result.data.education || '',
-          currentLocation: prev.currentLocation || result.data.currentLocation || '',
+          firstName: prev.firstName || parsedFirst, lastName: prev.lastName || parsedLast,
+          email: prev.email || result.data.email || '', contact: prev.contact || cleanContact || '',
+          linkedin: prev.linkedin || result.data.linkedin || '', gender: prev.gender || result.data.gender || 'Not Specified',
+          skills: prev.skills || result.data.skills || '', totalExperience: prev.totalExperience || cleanTotalExp || '',
+          education: prev.education || result.data.education || '', currentLocation: prev.currentLocation || result.data.currentLocation || '',
           currentCompany: prev.currentCompany || result.data.currentCompany || '',
         }));
         toast({ title: 'Success', description: 'Resume parsed successfully. Fields auto-filled.' });
       }
     } catch (error) {
-      console.error('Parsing error:', error);
       toast({ title: 'Warning', description: 'Could not parse some details. Please fill manually.', variant: 'default' });
     } finally {
-      setIsParsingResume(false);
-      event.target.value = '';
+      setIsParsingResume(false); event.target.value = '';
     }
   };
 
@@ -309,10 +301,6 @@ export default function RecruiterCandidates() {
       const authH = await authHeaders();
       const headers = { ...authH };
 
-      // For recruiter: backend already filters by recruiterId automatically.
-      // For admin/manager on THIS page (RecruiterCandidates — their personal view):
-      // pass their own _id as ?recruiterId= so the backend only returns their candidates,
-      // not all candidates in the entire database.
       const isAdminOrManager = currentUser?.role === 'admin' || currentUser?.role === 'manager';
       const candidateUrl = isAdminOrManager && currentUser?._id
         ? `${API_URL}/candidates?recruiterId=${currentUser._id}`
@@ -327,8 +315,7 @@ export default function RecruiterCandidates() {
       if (candRes.ok) {
         const allCandidates = await candRes.json();
         const fixedCandidates = allCandidates.map((c) => ({
-          ...c,
-          status: Array.isArray(c.status) ? c.status : [c.status || 'Submitted']
+          ...c, status: Array.isArray(c.status) ? c.status : [c.status || 'Submitted']
         }));
         setCandidates(fixedCandidates);
       }
@@ -336,9 +323,7 @@ export default function RecruiterCandidates() {
       if (clientRes.ok) setClients(await clientRes.json());
     } catch (error) {
       toast({ variant: "destructive", title: "Error", description: "Failed to load data" });
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
   useEffect(() => { fetchData(); }, []);
@@ -351,11 +336,9 @@ export default function RecruiterCandidates() {
   const handleInputChange = (key, value) => {
     let newValue = value;
     
-    if (key === 'contact') {
-      newValue = value.replace(/\D/g, '').slice(0, 10);
-    } else if (key === 'firstName' || key === 'lastName') {
-      newValue = value.replace(/[^a-zA-Z\s'\-]/g, '');
-    } else if (key === 'totalExperience' || key === 'relevantExperience') {
+    if (key === 'contact') newValue = value.replace(/\D/g, '').slice(0, 10);
+    else if (key === 'firstName' || key === 'lastName') newValue = value.replace(/[^a-zA-Z\s'\-]/g, '');
+    else if (key === 'totalExperience' || key === 'relevantExperience') {
       newValue = value.replace(/[^0-9.]/g, '');
       const parts = newValue.split('.');
       if (parts.length > 2) newValue = parts[0] + '.' + parts.slice(1).join('');
@@ -363,17 +346,12 @@ export default function RecruiterCandidates() {
 
     setFormData(prev => ({ ...prev, [key]: newValue }));
     
-    if (errors[key]) {
-      setErrors(prev => { const n = { ...prev }; delete n[key]; return n; });
-    }
+    if (errors[key]) setErrors(prev => { const n = { ...prev }; delete n[key]; return n; });
   };
 
   const addStatus = (newStatus) => {
-    if (newStatus === 'SELECT_ALL') {
-      setFormData(prev => ({ ...prev, status: [...allStatuses] }));
-    } else if (!formData.status.includes(newStatus)) {
-      setFormData(prev => ({ ...prev, status: [...prev.status, newStatus] }));
-    }
+    if (newStatus === 'SELECT_ALL') setFormData(prev => ({ ...prev, status: [...allStatuses] }));
+    else if (!formData.status.includes(newStatus)) setFormData(prev => ({ ...prev, status: [...prev.status, newStatus] }));
     if (errors.status) setErrors(prev => { const n = { ...prev }; delete n.status; return n; });
   };
 
@@ -396,36 +374,26 @@ export default function RecruiterCandidates() {
 
     if (data.dateOfBirth) {
       const todayDateStr = new Date().toLocaleDateString('en-CA');
-      if (data.dateOfBirth >= todayDateStr) {
-        newErrors.dateOfBirth = 'Date of Birth must be in the past (not today or future)';
-      } else {
+      if (data.dateOfBirth >= todayDateStr) newErrors.dateOfBirth = 'Date of Birth must be in the past (not today or future)';
+      else {
         const dob = new Date(data.dateOfBirth);
-        const now = new Date();
-        const ageYears = (now - dob) / (1000 * 60 * 60 * 24 * 365.25);
+        const ageYears = (new Date() - dob) / (1000 * 60 * 60 * 24 * 365.25);
         if (ageYears < 18) newErrors.dateOfBirth = 'Candidate must be at least 18 years old';
         else if (ageYears > 80) newErrors.dateOfBirth = 'Please enter a valid Date of Birth';
       }
     }
 
-    // 🔴 Updated Regex for validateForm
     const email = trimStr(data.email);
     if (!email) newErrors.email = "Email is required";
     else if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email)) newErrors.email = "Enter a valid email ending with .com, .in, etc.";
-    else if (errors.email && errors.email.includes('already exists')) {
-      newErrors.email = errors.email;
-    }
+    else if (errors.email && errors.email.includes('already exists')) newErrors.email = errors.email;
 
     const contact = trimStr(data.contact);
     if (!contact) newErrors.contact = "Phone is required";
     else if (contact.length !== 10) newErrors.contact = "Must be exactly 10 digits";
-    else if (errors.contact && errors.contact.includes('already exists')) {
-      newErrors.contact = errors.contact;
-    }
+    else if (errors.contact && errors.contact.includes('already exists')) newErrors.contact = errors.contact;
 
-    if (data.linkedin && !/^(https?:\/\/)?([\w\d\-]+\.)+\w{2,}(\/.*)?$/i.test(trimStr(data.linkedin))) {
-      newErrors.linkedin = "Invalid LinkedIn URL format";
-    }
-
+    if (data.linkedin && !/^(https?:\/\/)?([\w\d\-]+\.)+\w{2,}(\/.*)?$/i.test(trimStr(data.linkedin))) newErrors.linkedin = "Invalid LinkedIn URL format";
     if (data.currentLocation && trimStr(data.currentLocation).length > 100) newErrors.currentLocation = "Max 100 characters";
     if (data.preferredLocation && trimStr(data.preferredLocation).length > 100) newErrors.preferredLocation = "Max 100 characters";
 
@@ -469,13 +437,10 @@ export default function RecruiterCandidates() {
 
     if (isCustomSource && !trimStr(data.source)) newErrors.source = "Source is required";
     if (!data.status || data.status.length === 0) newErrors.status = "At least one status is required";
-    if (!data.dateAdded) {
-      newErrors.dateAdded = "Date Added is required";
-    } else {
+    if (!data.dateAdded) newErrors.dateAdded = "Date Added is required";
+    else {
       const todayDateStr = new Date().toLocaleDateString('en-CA'); 
-      if (data.dateAdded > todayDateStr) {
-        newErrors.dateAdded = "Date Added cannot be a future date — only today or earlier";
-      }
+      if (data.dateAdded > todayDateStr) newErrors.dateAdded = "Date Added cannot be a future date — only today or earlier";
     }
     if (data.remarks && trimStr(data.remarks).length > 1000) newErrors.remarks = "Max 1000 characters allowed";
 
@@ -484,30 +449,17 @@ export default function RecruiterCandidates() {
   };
 
   const stats = useMemo(() => {
-    const countStatus = (s) => candidates.filter(c =>
-      Array.isArray(c.status) ? c.status.includes(s) : c.status === s
-    ).length;
-
+    const countStatus = (s) => candidates.filter(c => Array.isArray(c.status) ? c.status.includes(s) : c.status === s).length;
     const todayStr2 = new Date().toLocaleDateString('en-CA');
     const todayCount = candidates.filter(c => {
       const d = c.dateAdded || c.createdAt;
-      if (!d) return false;
-      return new Date(d).toLocaleDateString('en-CA') === todayStr2;
+      return d ? new Date(d).toLocaleDateString('en-CA') === todayStr2 : false;
     }).length;
 
     return {
-      total: candidates.length,
-      turnups: countStatus('Turnups'),
-      noShow: countStatus('No Show'),
-      yetToAttend: countStatus('Yet to attend'),
-      selected: countStatus('Selected'),
-      rejected: countStatus('Rejected'),
-      hold: countStatus('Hold'),
-      joined: countStatus('Joined'),
-      pipeline: countStatus('Pipeline'),
-      backout: countStatus('Backout'),
-      sharedProfiles: countStatus('Shared Profiles'),
-      todaySubmissions: todayCount,
+      total: candidates.length, turnups: countStatus('Turnups'), noShow: countStatus('No Show'), yetToAttend: countStatus('Yet to attend'),
+      selected: countStatus('Selected'), rejected: countStatus('Rejected'), hold: countStatus('Hold'), joined: countStatus('Joined'),
+      pipeline: countStatus('Pipeline'), backout: countStatus('Backout'), sharedProfiles: countStatus('Shared Profiles'), todaySubmissions: todayCount,
     };
   }, [candidates]);
 
@@ -534,12 +486,15 @@ export default function RecruiterCandidates() {
     });
   }, [candidates, searchTerm, statusFilter, activeStatFilter]);
 
-  const handleExport = () => {
-    if (getFilteredCandidates.length === 0) {
-      toast({ title: "No data to export", variant: "destructive" });
-      return;
-    }
+  // --- PAGINATION LOGIC ---
+  const totalPages = Math.ceil(getFilteredCandidates.length / ITEMS_PER_PAGE);
+  const paginatedCandidates = getFilteredCandidates.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
 
+  const handleExport = () => {
+    if (getFilteredCandidates.length === 0) { toast({ title: "No data to export", variant: "destructive" }); return; }
     try {
       const rows = getFilteredCandidates.map(c => ({
         'Candidate ID':    c.candidateId || c._id?.slice(-6).toUpperCase() || '',
@@ -560,22 +515,12 @@ export default function RecruiterCandidates() {
       }));
 
       const ws = XLSX.utils.json_to_sheet(rows);
-
-      // Auto-size columns
-      const colWidths = Object.keys(rows[0] || {}).map(key => ({
-        wch: Math.max(key.length, ...rows.map(r => String(r[key] || '').length), 10)
-      }));
-      ws['!cols'] = colWidths;
-
+      ws['!cols'] = Object.keys(rows[0] || {}).map(key => ({ wch: Math.max(key.length, ...rows.map(r => String(r[key] || '').length), 10) }));
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Candidates');
       XLSX.writeFile(wb, `Candidates_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
-
       toast({ title: 'Exported!', description: `${rows.length} candidate(s) exported to Excel.` });
-    } catch (err) {
-      console.error('Export error:', err);
-      toast({ title: 'Export failed', description: 'Could not export file.', variant: 'destructive' });
-    }
+    } catch (err) { toast({ title: 'Export failed', variant: 'destructive' }); }
   };
 
   const getStatusBadgeVariant = (status) => {
@@ -590,38 +535,27 @@ export default function RecruiterCandidates() {
 
   const toggleSelectCandidate = (id) => setSelectedCandidates(prev => prev.includes(id) ? prev.filter(cid => cid !== id) : [...prev, id]);
   const selectAllCandidates = () => setSelectedCandidates(selectedCandidates.length === getFilteredCandidates.length ? [] : getFilteredCandidates.map(c => c._id));
-
   const openViewDialog = (c) => { setViewingCandidate(c); setIsViewDialogOpen(true); };
 
   const openEditDialog = (c) => {
-    setErrors({});
-    setSelectedCandidateId(c._id);
+    setErrors({}); setSelectedCandidateId(c._id);
     const isStandard = standardSources.includes(c.source || 'Portal');
     setIsCustomSource(!isStandard);
     setFormData({
-      firstName: c.firstName || '',
-      lastName: c.lastName || '',
-      email: c.email || '', contact: c.contact || '',
+      firstName: c.firstName || '', lastName: c.lastName || '', email: c.email || '', contact: c.contact || '',
       dateOfBirth: c.dateOfBirth ? new Date(c.dateOfBirth).toISOString().split('T')[0] : '',
       gender: c.gender || '', linkedin: c.linkedin || '',
       currentLocation: c.currentLocation || '', preferredLocation: c.preferredLocation || '',
       position: c.position || '', client: c.client || '', industry: c.industry || '',
       currentCompany: c.currentCompany || '', skills: Array.isArray(c.skills) ? c.skills.join(', ') : c.skills || '',
-      totalExperience: c.totalExperience ? String(c.totalExperience) : '',
-      relevantExperience: c.relevantExperience ? String(c.relevantExperience) : '',
-      education: c.education || '',
-      ctc: c.ctc ? String(c.ctc) : '', ectc: c.ectc ? String(c.ectc) : '',
+      totalExperience: c.totalExperience ? String(c.totalExperience) : '', relevantExperience: c.relevantExperience ? String(c.relevantExperience) : '',
+      education: c.education || '', ctc: c.ctc ? String(c.ctc) : '', ectc: c.ectc ? String(c.ectc) : '',
       currentTakeHome: c.currentTakeHome || '', expectedTakeHome: c.expectedTakeHome || '',
-      noticePeriod: c.noticePeriod ? String(c.noticePeriod) : '',
-      servingNoticePeriod: c.servingNoticePeriod ? 'true' : 'false',
-      lwd: c.lwd ? new Date(c.lwd).toISOString().split('T')[0] : '',
-      reasonForChange: c.reasonForChange || '',
-      offersInHand: c.offersInHand ? 'true' : 'false',
-      offerPackage: c.offerPackage || '',
-      source: c.source || 'Portal',
-      status: Array.isArray(c.status) ? c.status : [c.status || 'Submitted'],
-      rating: c.rating?.toString() || '0',
-      assignedJobId: typeof c.assignedJobId === 'object' ? c.assignedJobId._id : c.assignedJobId || '',
+      noticePeriod: c.noticePeriod ? String(c.noticePeriod) : '', servingNoticePeriod: c.servingNoticePeriod ? 'true' : 'false',
+      lwd: c.lwd ? new Date(c.lwd).toISOString().split('T')[0] : '', reasonForChange: c.reasonForChange || '',
+      offersInHand: c.offersInHand ? 'true' : 'false', offerPackage: c.offerPackage || '',
+      source: c.source || 'Portal', status: Array.isArray(c.status) ? c.status : [c.status || 'Submitted'],
+      rating: c.rating?.toString() || '0', assignedJobId: typeof c.assignedJobId === 'object' ? c.assignedJobId._id : c.assignedJobId || '',
       dateAdded: c.dateAdded ? new Date(c.dateAdded).toISOString().split('T')[0] : '',
       notes: c.notes || '', remarks: c.remarks || '', active: c.active !== false
     });
@@ -629,7 +563,6 @@ export default function RecruiterCandidates() {
   };
 
   const handleSave = async (isEdit) => {
-    // 🔴 Updated Regex for Hard Block validation
     if (formData.email && /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(formData.email.trim())) {
       try {
         const dupH = await authHeaders();
@@ -638,9 +571,8 @@ export default function RecruiterCandidates() {
         if (dupRes.ok) {
           const dupData = await dupRes.json();
           if (dupData.exists) {
-            const dupMsg = `A candidate with this email already exists (ID: ${dupData.candidateId}${dupData.name ? ' — ' + dupData.name : ''})`;
-            setErrors(prev => ({ ...prev, email: dupMsg }));
-            toast({ title: "Duplicate Email", description: "This email is already registered to another candidate.", variant: "destructive" });
+            setErrors(prev => ({ ...prev, email: `A candidate with this email already exists` }));
+            toast({ title: "Duplicate Email", description: "Email already registered", variant: "destructive" });
             return; 
           }
         }
@@ -657,9 +589,8 @@ export default function RecruiterCandidates() {
           if (phRes.ok) {
             const phData = await phRes.json();
             if (phData.exists) {
-              const phMsg = `A candidate with this phone already exists (ID: ${phData.candidateId}${phData.name ? ' — ' + phData.name : ''})`;
-              setErrors(prev => ({ ...prev, contact: phMsg }));
-              toast({ title: "Duplicate Phone", description: "This phone number is already registered to another candidate.", variant: "destructive" });
+              setErrors(prev => ({ ...prev, contact: `A candidate with this phone already exists` }));
+              toast({ title: "Duplicate Phone", description: "Phone already registered", variant: "destructive" });
               return; 
             }
           }
@@ -674,35 +605,18 @@ export default function RecruiterCandidates() {
       const headers = { ...authH, 'Content-Type': 'application/json' };
 
       const builtName = `${formData.firstName || ''} ${formData.lastName || ''}`.trim();
-
       const payload = {
-        ...formData,
-        firstName: formData.firstName.trim(),
-        lastName: formData.lastName.trim(),
-        name: builtName,
-        email: formData.email.trim(),
-        contact: formData.contact.trim(),
-        linkedin: formData.linkedin.trim(),
-        currentLocation: formData.currentLocation.trim(),
-        preferredLocation: formData.preferredLocation.trim(),
-        position: formData.position.trim(),
-        industry: formData.industry.trim(),
-        currentCompany: formData.currentCompany.trim(),
-        education: formData.education.trim(),
-        ctc: formData.ctc.trim(),
-        ectc: formData.ectc.trim(),
-        currentTakeHome: formData.currentTakeHome.trim(),
-        expectedTakeHome: formData.expectedTakeHome.trim(),
-        noticePeriod: formData.noticePeriod.trim(),
-        reasonForChange: formData.reasonForChange.trim(),
-        offerPackage: formData.offerPackage.trim(),
-        source: formData.source.trim(),
-        remarks: formData.remarks.trim(),
+        ...formData, firstName: formData.firstName.trim(), lastName: formData.lastName.trim(), name: builtName,
+        email: formData.email.trim(), contact: formData.contact.trim(), linkedin: formData.linkedin.trim(),
+        currentLocation: formData.currentLocation.trim(), preferredLocation: formData.preferredLocation.trim(),
+        position: formData.position.trim(), industry: formData.industry.trim(), currentCompany: formData.currentCompany.trim(),
+        education: formData.education.trim(), ctc: formData.ctc.trim(), ectc: formData.ectc.trim(),
+        currentTakeHome: formData.currentTakeHome.trim(), expectedTakeHome: formData.expectedTakeHome.trim(),
+        noticePeriod: formData.noticePeriod.trim(), reasonForChange: formData.reasonForChange.trim(),
+        offerPackage: formData.offerPackage.trim(), source: formData.source.trim(), remarks: formData.remarks.trim(),
         assignedJobId: typeof formData.assignedJobId === 'object' ? formData.assignedJobId._id : formData.assignedJobId,
         skills: typeof formData.skills === 'string' ? formData.skills.split(',').map((s) => s.trim()).filter(Boolean) : formData.skills,
-        rating: parseInt(formData.rating) || 0,
-        servingNoticePeriod: formData.servingNoticePeriod === 'true',
-        offersInHand: formData.offersInHand === 'true',
+        rating: parseInt(formData.rating) || 0, servingNoticePeriod: formData.servingNoticePeriod === 'true', offersInHand: formData.offersInHand === 'true',
         status: formData.status
       };
       const url = isEdit ? `${API_URL}/candidates/${selectedCandidateId}` : `${API_URL}/candidates`;
@@ -712,26 +626,13 @@ export default function RecruiterCandidates() {
       if (res.ok) {
         toast({ title: "Success", description: `Candidate ${isEdit ? 'updated' : 'added'} successfully` });
         setIsAddDialogOpen(false); setIsEditDialogOpen(false);
-        // Update state directly — no full refetch needed
         const fixedData = { ...data, status: Array.isArray(data.status) ? data.status : [data.status || 'Submitted'] };
-        if (isEdit) {
-          setCandidates(prev => prev.map(c => c._id === selectedCandidateId ? { ...c, ...fixedData } : c));
-        } else {
-          setCandidates(prev => [fixedData, ...prev]);
-        }
+        if (isEdit) setCandidates(prev => prev.map(c => c._id === selectedCandidateId ? { ...c, ...fixedData } : c));
+        else setCandidates(prev => [fixedData, ...prev]);
         setFormData(initialFormState);
-      } else {
-        throw new Error(data.message || 'Operation failed');
-      }
-    } catch (error) {
-      const msg = error.message || '';
-      if (msg.toLowerCase().includes('email') || msg.toLowerCase().includes('duplicate') || msg.toLowerCase().includes('e11000')) {
-        setErrors(prev => ({ ...prev, email: 'A candidate with this email already exists in the database.' }));
-        toast({ variant: "destructive", title: "Duplicate Email", description: "This email is already registered to another candidate." });
-      } else {
-        toast({ variant: "destructive", title: "Error", description: error.message || "Operation failed" });
-      }
-    } finally { setIsSubmitting(false); }
+      } else throw new Error(data.message || 'Operation failed');
+    } catch (error) { toast({ variant: "destructive", title: "Error", description: error.message || "Operation failed" }); } 
+    finally { setIsSubmitting(false); }
   };
 
   const toggleActiveStatus = async (id, currentStatus) => {
@@ -754,39 +655,25 @@ export default function RecruiterCandidates() {
       await Promise.all(deletePromises);
       toast({ title: "Deleted", description: `${selectedCandidates.length} candidate(s) deleted successfully` });
       setSelectedCandidates([]); fetchData(); setIsDeleteConfirmOpen(false);
-    } catch (error) {
-      toast({ variant: "destructive", title: "Error", description: "Failed to delete one or more candidates" });
-    } finally { setIsDeleting(false); }
+    } catch (error) { toast({ variant: "destructive", title: "Error" }); } 
+    finally { setIsDeleting(false); }
   };
 
   const handleImportExcel = async () => {
-    if (!importFile) { toast({ title: 'No file selected', description: 'Please select an Excel file to import', variant: 'destructive' }); return; }
+    if (!importFile) { toast({ title: 'No file selected', variant: 'destructive' }); return; }
     setIsImporting(true); setImportResult(null);
     try {
       const fd = new FormData(); fd.append('file', importFile);
       const authH = await authHeaders();
-      const response = await fetch(`${API_URL}/candidates/bulk-import`, {
-        method: 'POST',
-        headers: { ...authH },
-        body: fd,
-      });
+      const response = await fetch(`${API_URL}/candidates/bulk-import`, { method: 'POST', headers: { ...authH }, body: fd });
       const result = await response.json();
       if (!response.ok) throw new Error(result.message || 'Import failed');
       const successCount = result.imported ?? 0;
-      const createdCount = result.created ?? successCount;
-      const updatedCount = result.updated ?? 0;
-      const failCount = Math.max(0, (result.total ?? 0) - successCount);
-      const errorMessages = (result.errors || []).map((e) => typeof e === 'string' ? e : `Row ${e.row} (${e.candidate}): ${e.error}`);
-      setImportResult({ success: successCount, failed: failCount, errors: errorMessages });
-      if (successCount > 0) {
-        toast({ title: 'Import Successful', description: `${createdCount} added, ${updatedCount} updated.` });
-        fetchData();
-      } else {
-        toast({ title: 'Nothing Imported', description: result.message || 'No candidates were added.', variant: 'destructive' });
-      }
-    } catch (error) {
-      toast({ title: 'Import Failed', description: error.message, variant: 'destructive' });
-    } finally { setIsImporting(false); }
+      setImportResult({ success: successCount, failed: Math.max(0, (result.total ?? 0) - successCount), errors: (result.errors || []).map((e) => typeof e === 'string' ? e : `Row ${e.row}: ${e.error}`) });
+      if (successCount > 0) { toast({ title: 'Import Successful' }); fetchData(); } 
+      else toast({ title: 'Nothing Imported', variant: 'destructive' });
+    } catch (error) { toast({ title: 'Import Failed', variant: 'destructive' }); } 
+    finally { setIsImporting(false); }
   };
 
   const handleWhatsApp = (c) => {
@@ -822,40 +709,20 @@ export default function RecruiterCandidates() {
       <div className="space-y-1">
         <Label className={errors.contact ? "text-red-500" : ""}>Phone *</Label>
         <div className="relative">
-          <Input
-            value={formData.contact}
-            onChange={e => handleInputChange('contact', e.target.value)}
-            onBlur={e => checkPhoneDuplicate(e.target.value)}
-            className={errors.contact ? "border-red-500" : ""}
-            placeholder="10 Digits Only"
-          />
-          {isCheckingPhone && (
-            <span className="absolute right-3 top-2.5 text-xs text-slate-400 flex items-center gap-1">
-              <Loader2 className="h-3 w-3 animate-spin" /> Checking...
-            </span>
-          )}
+          <Input value={formData.contact} onChange={e => handleInputChange('contact', e.target.value)} onBlur={e => checkPhoneDuplicate(e.target.value)} className={errors.contact ? "border-red-500" : ""} placeholder="10 Digits Only" />
+          {isCheckingPhone && <span className="absolute right-3 top-2.5 text-xs text-slate-400 flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Checking...</span>}
         </div>
         {errors.contact && <span className="text-xs text-red-500">{errors.contact}</span>}
       </div>
       <div className="space-y-1">
         <Label className={errors.dateOfBirth ? "text-red-500" : ""}>Date of Birth</Label>
-        <Input
-          type="date"
-          value={formData.dateOfBirth}
-          onChange={e => handleInputChange('dateOfBirth', e.target.value)}
-          max={new Date(Date.now() - 86400000).toISOString().split('T')[0]}
-          className={errors.dateOfBirth ? "border-red-500" : ""}
-        />
+        <Input type="date" value={formData.dateOfBirth} onChange={e => handleInputChange('dateOfBirth', e.target.value)} max={new Date(Date.now() - 86400000).toISOString().split('T')[0]} className={errors.dateOfBirth ? "border-red-500" : ""} />
         {errors.dateOfBirth && <span className="text-xs text-red-500">{errors.dateOfBirth}</span>}
       </div>
       <div className="space-y-1">
         <Label className={errors.gender ? "text-red-500" : ""}>Gender</Label>
         <NativeSelect value={formData.gender} onChange={val => handleInputChange('gender', val)} className={errors.gender ? "border-red-500" : ""}>
-          <option value="">Select</option>
-          <option value="Male">Male</option>
-          <option value="Female">Female</option>
-          <option value="Other">Other</option>
-          <option value="Not Specified">Not Specified</option>
+          <option value="">Select</option><option value="Male">Male</option><option value="Female">Female</option><option value="Other">Other</option><option value="Not Specified">Not Specified</option>
         </NativeSelect>
         {errors.gender && <span className="text-xs text-red-500">{errors.gender}</span>}
       </div>
@@ -960,8 +827,7 @@ export default function RecruiterCandidates() {
       <div className="space-y-1">
         <Label className={errors.servingNoticePeriod ? "text-red-500" : ""}>Serving Notice?</Label>
         <NativeSelect value={formData.servingNoticePeriod} onChange={val => handleInputChange('servingNoticePeriod', val)} className={errors.servingNoticePeriod ? "border-red-500" : ""}>
-          <option value="false">No</option>
-          <option value="true">Yes</option>
+          <option value="false">No</option><option value="true">Yes</option>
         </NativeSelect>
         {errors.servingNoticePeriod && <span className="text-xs text-red-500">{errors.servingNoticePeriod}</span>}
       </div>
@@ -983,8 +849,7 @@ export default function RecruiterCandidates() {
       <div className="space-y-1">
         <Label className={errors.offersInHand ? "text-red-500" : ""}>Offers in Hand?</Label>
         <NativeSelect value={formData.offersInHand} onChange={val => handleInputChange('offersInHand', val)} className={errors.offersInHand ? "border-red-500" : ""}>
-          <option value="false">No</option>
-          <option value="true">Yes</option>
+          <option value="false">No</option><option value="true">Yes</option>
         </NativeSelect>
         {errors.offersInHand && <span className="text-xs text-red-500">{errors.offersInHand}</span>}
       </div>
@@ -1036,13 +901,7 @@ export default function RecruiterCandidates() {
       </div>
       <div className="space-y-1">
         <Label className={errors.dateAdded ? "text-red-500" : ""}>Date Added *</Label>
-        <Input
-          type="date"
-          value={formData.dateAdded}
-          onChange={e => handleInputChange('dateAdded', e.target.value)}
-          max={todayStr}
-          className={errors.dateAdded ? "border-red-500" : ""}
-        />
+        <Input type="date" value={formData.dateAdded} onChange={e => handleInputChange('dateAdded', e.target.value)} max={todayStr} className={errors.dateAdded ? "border-red-500" : ""} />
         <p className="text-xs text-slate-400 mt-0.5">Cannot be a future date. Defaults to today.</p>
         {errors.dateAdded && <span className="text-xs text-red-500">{errors.dateAdded}</span>}
       </div>
@@ -1057,20 +916,10 @@ export default function RecruiterCandidates() {
   return (
     <>
       <style>{`
-        .sleek-scrollbar::-webkit-scrollbar {
-          height: 10px;
-        }
-        .sleek-scrollbar::-webkit-scrollbar-track {
-          background: #f1f5f9; 
-          border-radius: 6px;
-        }
-        .sleek-scrollbar::-webkit-scrollbar-thumb {
-          background: #cbd5e1; 
-          border-radius: 6px;
-        }
-        .sleek-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: #94a3b8; 
-        }
+        .sleek-scrollbar::-webkit-scrollbar { height: 10px; }
+        .sleek-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 6px; }
+        .sleek-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 6px; }
+        .sleek-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
       `}</style>
 
       <main className="flex-1 grid grid-cols-1 min-w-0 w-full p-6 overflow-y-auto overflow-x-hidden pb-48">
@@ -1078,9 +927,7 @@ export default function RecruiterCandidates() {
         <div className="w-full max-w-full mx-auto space-y-6">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
-              <h1 className="text-3xl font-bold">
-                My Candidates
-              </h1>
+              <h1 className="text-3xl font-bold">My Candidates</h1>
               <p className="text-slate-500">Manage pipeline</p>
             </div>
             <div className="flex gap-3 flex-wrap">
@@ -1164,7 +1011,7 @@ export default function RecruiterCandidates() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {getFilteredCandidates.map((c, index) => {
+                    {paginatedCandidates.map((c, index) => {
                       return (
                       <tr key={c._id} className="hover:bg-slate-50">
                         <td className="p-3 pl-4 whitespace-nowrap"><input type="checkbox" checked={selectedCandidates.includes(c._id)} onChange={() => toggleSelectCandidate(c._id)} className="h-4 w-4 rounded" /></td>
@@ -1204,39 +1051,98 @@ export default function RecruiterCandidates() {
                   </tbody>
                 </table>
               </div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {getFilteredCandidates.map(c => (
-                <div key={c._id} className="bg-white border border-slate-200 rounded-xl hover:shadow-lg transition-all p-6">
-                  <div className="flex justify-between mb-4">
-                    <div className="flex gap-3">
-                      <div>
-                        <h3 className="font-bold text-slate-900">{c.name}</h3>
-                        <p className="text-sm text-blue-600 font-mono">{getCandidateId(c)}</p>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-1 justify-end max-w-[50%]">
-                      {Array.isArray(c.status) ? c.status.slice(0, 2).map(s => (
-                        <Badge key={s} variant={getStatusBadgeVariant(s)} className="text-[10px]">{s}</Badge>
-                      )) : <Badge variant={getStatusBadgeVariant(c.status)}>{c.status}</Badge>}
-                      {Array.isArray(c.status) && c.status.length > 2 && <span className="text-xs text-slate-500">+{c.status.length - 2}</span>}
-                    </div>
-                  </div>
-                  <div className="space-y-2 text-sm text-slate-600">
-                    <div className="flex items-center gap-2"><Building className="h-4 w-4" /> {c.client}</div>
-                    <div className="flex items-center gap-2"><Award className="h-4 w-4" /> {formatSkills(c.skills)}</div>
-                    <div className="flex items-center gap-2"><Mail className="h-4 w-4" /> {c.email}</div>
-                    <div className="flex items-center gap-2"><Phone className="h-4 w-4" /> {c.contact}</div>
-                  </div>
-                  <div className="mt-4 flex gap-2">
-                    <Button variant="outline" className="flex-1" onClick={() => openViewDialog(c)}>View</Button>
-                    <Button variant="outline" className="flex-1" onClick={() => openEditDialog(c)}>Edit</Button>
-                    <Button variant="outline" className="text-green-600 hover:bg-green-50" onClick={() => handleWhatsApp(c)}><MessageCircle className="h-4 w-4" /></Button>
+
+              {/* PAGINATION CONTROLS (TABLE) */}
+              {totalPages > 1 && (
+                <div className="flex flex-col sm:flex-row justify-between items-center p-4 border-t border-slate-200 bg-white gap-4">
+                  <span className="text-sm text-slate-500">
+                    Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, getFilteredCandidates.length)} of {getFilteredCandidates.length} entries
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      disabled={currentPage === 1}
+                      onClick={() => setCurrentPage(p => p - 1)}
+                      className="px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                    >
+                      Previous
+                    </button>
+                    <span className="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded-lg">
+                      Page {currentPage} of {totalPages}
+                    </span>
+                    <button
+                      disabled={currentPage === totalPages}
+                      onClick={() => setCurrentPage(p => p + 1)}
+                      className="px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                    >
+                      Next
+                    </button>
                   </div>
                 </div>
-              ))}
+              )}
+
             </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {paginatedCandidates.map(c => (
+                  <div key={c._id} className="bg-white border border-slate-200 rounded-xl hover:shadow-lg transition-all p-6">
+                    <div className="flex justify-between mb-4">
+                      <div className="flex gap-3">
+                        <div>
+                          <h3 className="font-bold text-slate-900">{c.name}</h3>
+                          <p className="text-sm text-blue-600 font-mono">{getCandidateId(c)}</p>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-1 justify-end max-w-[50%]">
+                        {Array.isArray(c.status) ? c.status.slice(0, 2).map(s => (
+                          <Badge key={s} variant={getStatusBadgeVariant(s)} className="text-[10px]">{s}</Badge>
+                        )) : <Badge variant={getStatusBadgeVariant(c.status)}>{c.status}</Badge>}
+                        {Array.isArray(c.status) && c.status.length > 2 && <span className="text-xs text-slate-500">+{c.status.length - 2}</span>}
+                      </div>
+                    </div>
+                    <div className="space-y-2 text-sm text-slate-600">
+                      <div className="flex items-center gap-2"><Building className="h-4 w-4" /> {c.client}</div>
+                      <div className="flex items-center gap-2"><Award className="h-4 w-4" /> {formatSkills(c.skills)}</div>
+                      <div className="flex items-center gap-2"><Mail className="h-4 w-4" /> {c.email}</div>
+                      <div className="flex items-center gap-2"><Phone className="h-4 w-4" /> {c.contact}</div>
+                    </div>
+                    <div className="mt-4 flex gap-2">
+                      <Button variant="outline" className="flex-1" onClick={() => openViewDialog(c)}>View</Button>
+                      <Button variant="outline" className="flex-1" onClick={() => openEditDialog(c)}>Edit</Button>
+                      <Button variant="outline" className="text-green-600 hover:bg-green-50" onClick={() => handleWhatsApp(c)}><MessageCircle className="h-4 w-4" /></Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* PAGINATION CONTROLS (GRID) */}
+              {totalPages > 1 && (
+                <div className="mt-6 flex flex-col sm:flex-row justify-between items-center p-4 border border-slate-200 rounded-xl bg-white gap-4">
+                  <span className="text-sm text-slate-500">
+                    Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, getFilteredCandidates.length)} of {getFilteredCandidates.length} entries
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      disabled={currentPage === 1}
+                      onClick={() => setCurrentPage(p => p - 1)}
+                      className="px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                    >
+                      Previous
+                    </button>
+                    <span className="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded-lg">
+                      Page {currentPage} of {totalPages}
+                    </span>
+                    <button
+                      disabled={currentPage === totalPages}
+                      onClick={() => setCurrentPage(p => p + 1)}
+                      className="px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </main>
