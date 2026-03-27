@@ -23,6 +23,13 @@ import interviewRoutes from './routes/interviewRoutes.js';
 import messageRoutes   from './routes/messageRoutes.js';
 import channelRoutes  from './routes/channelRoutes.js';
 
+// ── Agreement Module Routes ───────────────────────────────────────────────────
+import { connectAgreementDB } from './config/agreementDatabase.js';
+import agreementCompanyRoutes from './routes/agreementCompanyRoutes.js';
+import agreementLetterRoutes  from './routes/agreementLetterRoutes.js';
+import agreementEmailRoutes   from './routes/agreementEmailRoutes.js';
+import agreementUploadRoutes  from './routes/agreementUploadRoutes.js';
+
 // ── __dirname shim for ES Modules ─────────────────────────────────────────────
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
@@ -77,6 +84,9 @@ const connectDB = async () => {
   }
 };
 connectDB();
+
+// Connect Agreement module DB (native MongoDB driver)
+connectAgreementDB().catch(err => console.warn('Agreement DB not connected:', err.message));
 
 // ── Socket.IO events ───────────────────────────────────────────────────────────
 io.on('connection', (socket) => {
@@ -143,6 +153,12 @@ app.use('/api/jobs',       jobRoutes);
 app.use('/api/interviews', interviewRoutes);
 app.use('/api/messages',   messageRoutes);
 app.use('/api/channels',   channelRoutes);
+
+// ── Agreement Module Routes ────────────────────────────────────────────────────
+app.use('/agreement-companies', agreementCompanyRoutes);
+app.use('/agreement-letters',   agreementLetterRoutes);
+app.use('/agreement-email',     agreementEmailRoutes);
+app.use('/upload',              agreementUploadRoutes);
 
 // Fallback routes (legacy support)
 app.use('/auth',       authRoutes);

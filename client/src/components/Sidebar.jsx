@@ -5,7 +5,7 @@ import {
   LayoutDashboard, UserPlus, Briefcase, 
   Building2, Receipt, ClipboardList, MessageSquare, 
   BarChart3, Settings, Power, User, Users, Calendar,
-  Video, FileText // <-- Added missing imports here
+  Video, FileText, Handshake // <-- Added Handshake icon
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -30,9 +30,7 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
     { name: 'Requirements',       path: '/admin/requirements',      icon: ClipboardList },
     { name: 'Schedules',          path: '/admin/schedules',         icon: Calendar },
     { name: 'Messages',           path: '/admin/messages',          icon: MessageSquare },
-    // External links added here
-    { name: 'Mock Interviews',    isExternal: true, url: 'https://ai-adaptive-interview-k6md3h5l7-oragantisagar041s-projects.vercel.app/admin.html',   icon: Video },
-    { name: 'Offer Letters',      isExternal: true, url: 'https://automated-offer-letter-generator-mocha.vercel.app/?jr_id=l_4387424181',     icon: FileText }, 
+    { name: 'Agreements',          path: '/admin/agreements',        icon: Handshake },
     { name: 'Reports',            path: '/admin/reports',           icon: BarChart3 },
     { name: 'Settings',           path: '/admin/settings',          icon: Settings }, 
   ];
@@ -64,6 +62,7 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
       // External links added for admin as well
       { name: 'Mock Interviews',    isExternal: true, url: 'https://ai-adaptive-interview-k6md3h5l7-oragantisagar041s-projects.vercel.app/admin.html',   icon: Video },
       { name: 'Offer Letters',      isExternal: true, url: 'https://automated-offer-letter-generator-mocha.vercel.app/?jr_id=l_4387424181',     icon: FileText }, 
+      { name: 'Agreements',          path: '/admin/agreements',        icon: Handshake },
       { name: 'Reports',            path: '/admin/reports',       icon: BarChart3 },
       { name: 'Settings',           path: '/admin/settings',      icon: Settings },
     ];

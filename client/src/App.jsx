@@ -22,6 +22,7 @@ import TeamsChat from '@/pages/TeamsChat';
 import AdminMessages from '@/pages/AdminMessages';
 import AdminReports from '@/pages/AdminReports';
 import AdminSettings from '@/pages/AdminSettings';
+import AgreementGenerator from '@/pages/AgreementGenerator';
 
 // Manager Specific Pages
 import ManagerDashboard from '@/pages/ManagerDashboard'; // ✅ IMPORTED NEW PAGE
@@ -98,6 +99,7 @@ function AppRoutes() {
 
         <Route path="reports" element={<AdminReports />} />
         <Route path="settings" element={<AdminSettings />} />
+        <Route path="agreements" element={<AgreementGenerator />} />
       </Route>
 
       {/* ===================== RECRUITER ROUTES ===================== */}
