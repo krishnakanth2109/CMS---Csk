@@ -306,7 +306,7 @@ const AdminClientInvoice = () => {
       });
 
       // -- Date: Aligned with template --
-      drawText(getOrdinalDate(form.invoiceDate), 468, 118, 10);
+      drawText(getOrdinalDate(form.invoiceDate), 468, 118, 10, true);
 
       // -- Deep Clean of Template Table Layer --
       // Using a slightly wider and taller mask to catch all border artifacts
@@ -445,10 +445,10 @@ const AdminClientInvoice = () => {
       }
 
       // -- Signature Block (Left Aligned) --
-      const sigOffset = form.accountType !== "no" ? (accSpacing * 8) + 15 : 20;
+      const sigOffset = form.accountType !== "no" ? (accSpacing * 8) + 95 : 100;
       const sigY = accY + sigOffset;
       drawText("Navya S", 68, sigY, 11, true);
-      drawText("Vagarious Solutions Pvt Ltd", 68, sigY + 16, 11, true);
+      drawText("Vagarious Solutions Pvt Ltd", 68, sigY + 24, 11, true);
 
       // 4. Save and return blob
       const pdfBytes = await pdfDoc.save();
@@ -567,7 +567,7 @@ const AdminClientInvoice = () => {
          <table style="width: 100%; border: none;">
             <tr>
                <td><strong>Invoice Number:</strong> ${form.invoiceNumber}</td>
-               <td style="text-align: right;"><strong>Date:</strong> ${getOrdinalDate(form.invoiceDate)}</td>
+               <td style="text-align: right;"><strong>Date: </strong> <strong>${getOrdinalDate(form.invoiceDate)}</strong></td>
             </tr>
          </table>
          <br/>
@@ -607,9 +607,9 @@ const AdminClientInvoice = () => {
          </table>
          <br/>
          <p><strong>In Words:</strong> ${numberToWords(grandTotalAmt).toUpperCase()}</p>
-         <br/><br/>
+         <br/><br/><br/><br/><br/><br/>
          <p style="text-align: right; width: 100%;">
-            Navya S<br/>
+            Navya S<br/><br/>
             Vagarious Solutions Pvt Ltd
          </p>
       </div>
