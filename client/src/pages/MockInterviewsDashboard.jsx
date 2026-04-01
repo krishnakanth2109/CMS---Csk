@@ -176,19 +176,18 @@ export default function MockInterviewsDashboard() {
     }
   };
 
-  const fetchSessions = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true);
+  const fetchSessions = useCallback(async () => {
+    setLoading(true);
     try {
       const data = await apiFetch(`/admin/sessions?admin_id=${adminId}`);
       if (data.status === 'success') {
         setSessions(data.sessions || []);
-        // Reset selection ONLY on full refresh (not silent ones)
-        if (!silent) setSelectedSessions([]); 
+        setSelectedSessions([]); // Reset on refresh
       }
     } catch (err) {
-      if (!silent) toast({ title: 'Sync Failed', description: err.message, variant: 'destructive' });
+      toast({ title: 'Sync Failed', description: err.message, variant: 'destructive' });
     } finally {
-      if (!silent) setLoading(false);
+      setLoading(false);
     }
   }, [adminId, toast]);
 
@@ -222,22 +221,11 @@ export default function MockInterviewsDashboard() {
     }
   }, []);
 
-  // Initial Load
   useEffect(() => {
     fetchSessions();
     fetchAllCandidates();
     fetchRecruiters();
   }, [fetchSessions, fetchAllCandidates, fetchRecruiters]);
-
-  // Automatic Background Refresh (Every 30 seconds)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      fetchSessions(true); // Silent refresh of sessions
-      fetchRecruiters();   // Also refresh recruiters list
-      fetchAllCandidates(); // Also refresh candidates list
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [fetchSessions, fetchRecruiters, fetchAllCandidates]);
 
   const handleSelectCandidate = (id) => {
     setSelectedCandidateId(id);

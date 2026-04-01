@@ -383,7 +383,7 @@ const AdminClientInvoice = () => {
         }
 
         drawCell(c.role || "", colStarts[2], colWidths[2], currentY, rowDR);
-        drawCell(c.joiningDate ? getOrdinalDate(c.joiningDate) : "", colStarts[3], colWidths[3], currentY, rowDR);
+        drawCell(c.joiningDate ? getOrdinalDate(c.joiningDate) : "", colStarts[3], colWidths[3], currentY, rowDR, 'center', true);
         drawCell(Number(c.actualSalary || 0).toLocaleString("en-IN"), colStarts[4], colWidths[4], currentY, rowDR);
         drawCell(`${c.percentage || 0}%`, colStarts[5], colWidths[5], currentY, rowDR);
         drawCell(Number(c.payment || 0).toLocaleString("en-IN"), colStarts[6], colWidths[6], currentY, rowDR);
@@ -445,10 +445,10 @@ const AdminClientInvoice = () => {
       }
 
       // -- Signature Block (Left Aligned) --
-      const sigOffset = form.accountType !== "no" ? (accSpacing * 8) + 95 : 100;
+      const sigOffset = form.accountType !== "no" ? (accSpacing * 10) + 30 : 60;
       const sigY = accY + sigOffset;
       drawText("Navya S", 68, sigY, 11, true);
-      drawText("Vagarious Solutions Pvt Ltd", 68, sigY + 24, 11, true);
+      drawText("Vagarious Solutions Pvt Ltd", 68, sigY + 16, 11, true);
 
       // 4. Save and return blob
       const pdfBytes = await pdfDoc.save();
@@ -550,7 +550,7 @@ const AdminClientInvoice = () => {
             <td style="border: 1px solid black; padding: 8px;">${i + 1}</td>
             <td style="border: 1px solid black; padding: 8px;">${c.name}</td>
             <td style="border: 1px solid black; padding: 8px;">${c.role}</td>
-            <td style="border: 1px solid black; padding: 8px;">${getOrdinalDate(c.joiningDate)}</td>
+            <td style="border: 1px solid black; padding: 8px;"><strong>${getOrdinalDate(c.joiningDate)}</strong></td>
             <td style="border: 1px solid black; padding: 8px;">${c.actualSalary}</td>
             <td style="border: 1px solid black; padding: 8px;">${c.percentage || 0}%</td>
             <td style="border: 1px solid black; padding: 8px;">${c.payment}</td>
@@ -567,7 +567,7 @@ const AdminClientInvoice = () => {
          <table style="width: 100%; border: none;">
             <tr>
                <td><strong>Invoice Number:</strong> ${form.invoiceNumber}</td>
-               <td style="text-align: right;"><strong>Date: </strong> <strong>${getOrdinalDate(form.invoiceDate)}</strong></td>
+               <td style="text-align: right;"><strong>Date:</strong> <strong>${getOrdinalDate(form.invoiceDate)}</strong></td>
             </tr>
          </table>
          <br/>
@@ -607,9 +607,9 @@ const AdminClientInvoice = () => {
          </table>
          <br/>
          <p><strong>In Words:</strong> ${numberToWords(grandTotalAmt).toUpperCase()}</p>
-         <br/><br/><br/><br/><br/><br/>
+         <br/><br/>
          <p style="text-align: right; width: 100%;">
-            Navya S<br/><br/>
+            Navya S<br/>
             Vagarious Solutions Pvt Ltd
          </p>
       </div>
