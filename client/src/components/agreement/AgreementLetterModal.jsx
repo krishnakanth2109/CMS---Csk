@@ -288,6 +288,45 @@ const AgreementLetterModal = ({ employee, onClose, onSuccess, apiUrl }) => {
         document.body.removeChild(link);
     };
 
+    const handleDownloadWord = async () => {
+        if (!generatedContent) return;
+
+        const btn = document.getElementById('agreementWordBtn');
+        if (btn) { btn.innerText = 'Processing...'; btn.disabled = true; }
+
+        try {
+            const res = await fetch(`${API_URL}/agreement-letters/download-docx`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    html_content: generatedContent
+                })
+            });
+
+            if (!res.ok) {
+                const isJson = res.headers.get('content-type')?.includes('application/json');
+                const error = isJson ? await res.json() : await res.text();
+                throw new Error(error.detail || "Failed to generate Word document");
+            }
+
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${employee.name.replace(/\s+/g, '_')}_${letterType}.docx`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+        } catch (error) {
+            console.error("Failed to generate Word document:", error);
+            alert("Failed to create Word document from template: " + error.message);
+        } finally {
+            if (btn) { btn.innerText = 'Download Word'; btn.disabled = false; }
+        }
+    };
+
     const handleSendEmail = async () => {
         const btn = document.getElementById('agreementEmailBtn');
         btn.innerText = 'Sending...';
@@ -513,6 +552,17 @@ const AgreementLetterModal = ({ employee, onClose, onSuccess, apiUrl }) => {
                         </div>
 
                         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end', flex: '1 1 auto', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                            <button
+                                id="agreementWordBtn"
+                                onClick={handleDownloadWord}
+                                style={{
+                                    background: 'white', border: '2px solid #0056b3', color: '#0056b3',
+                                    padding: '10px 18px', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.9rem',
+                                    display: 'flex', alignItems: 'center', gap: '8px', flex: '1 1 auto', justifyContent: 'center'
+                                }}
+                            >
+                                <Download size={18} /> Download Word
+                            </button>
                             <button
                                 onClick={handleDownloadPDF}
                                 style={{

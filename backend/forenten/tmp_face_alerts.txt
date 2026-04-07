@@ -1,6 +1,0 @@
-1386:            const fa  = (_qTrack && _qTrack.faceAlerts)   || 0;
-1448:                faceAlerts: 0,              // face-not-visible alert count
-1466:        function recordFaceAlert() {
-1467:            _qTrack.faceAlerts++;
-1525:                face_alerts: _qTrack.faceAlerts,
-2721:                    if (typeof recordFaceAlert === 'function') recordFaceAlert();

@@ -1,6 +1,0 @@
-Failed to start server: ReferenceError: connectDatabase is not defined
-    at start (file:///C:/Users/kchan/Downloads/chandu%20resume/projects/CMS_AI_Interview/backend/routes/aiMockRoutes.js:883:3)
-    at file:///C:/Users/kchan/Downloads/chandu%20resume/projects/CMS_AI_Interview/backend/routes/aiMockRoutes.js:892:1
-    at ModuleJob.run (node:internal/modules/esm/module_job:329:25)
-    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:644:26)
-    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)

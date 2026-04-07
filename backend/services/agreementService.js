@@ -5,7 +5,7 @@
 
 const COMPANY_ADDRESSES = {
     'Arah Infotech Pvt Ltd': 'Ground Floor, Shanmukh Emmpire, Ayyappa Society, Main Road, Madhapur, Hyderabad, Telangana - 500081',
-    'VAGARIOUS SOLUTIONS PVT LTD': 'Plot No. 1208, Flat No. 201, 2nd Floor, Spline Arcade, Ayyappa Society Main Road, Sri Sai Nagar, Madhapur, Hyderabad, Telangana - 500081',
+    'VAGARIOUS SOLUTIONS PVT LTD': 'Ground Floor, Shanmukh Emmpire, Ayyappa Society Main Road, Madhapur, Hyderabad, Telangana - 500081',
     'UP LIFE INDIA PVT LTD': 'Ground Floor, Shanmukh Emmpire, 83, Ayyappa Society, Mega Hills, Madhapur, Hyderabad, Telangana - 500081',
     'ZERO7 TECHNOLOGIES TRAINING & DEVELOPMENT': 'Ground Floor, Shanmukh Emmpire, Ayyappa Society, Main Road, Madhapur, Hyderabad, Telangana - 500081',
 };
@@ -72,8 +72,7 @@ export function generateAgreement(data, letterType = 'Agreement') {
     }
 
     return `<div style="font-family: Arial, Helvetica, sans-serif; color: #000; line-height: 1.6; max-width: 800px; margin: 0 auto; text-align: justify; padding-bottom: 50px;">
-
-<h3 style="text-align: center; text-decoration: underline; font-size: 13px; margin-bottom: 30px; word-wrap: break-word; overflow-wrap: break-word;">AGREEMENT B/W ${headingCompany} - ${partnerCompany.toUpperCase()}</h3>
+<h3 style="color: #000000; text-align: center; text-decoration: underline; font-size: 13px; margin-bottom: 30px; word-wrap: break-word; overflow-wrap: break-word;">AGREEMENT B/W ${headingCompany} - ${partnerCompany.toUpperCase()}</h3>
 
 <p style="margin-bottom: 20px;">This Agreement is made and entered into on <strong>${joiningDate}</strong> by and between:</p>
 
@@ -87,7 +86,7 @@ export function generateAgreement(data, letterType = 'Agreement') {
 
 
 <div class="section-block">
-<h4 style="color: #3b82f6; margin-top: 25px; margin-bottom: 8px; font-size: 13px; text-transform: uppercase;">RECITALS</h4>
+<h4 style="color: #000000; margin-top: 25px; margin-bottom: 8px; font-size: 13px; text-transform: uppercase;">RECITALS</h4>
 <p>WHEREAS, the Client is engaged in the field of Information Technology and Services;</p>
 <p>WHEREAS, ${shortCompany} is engaged in human resource management and consultancy services, including recruitment, training, and business process outsourcing;</p>
 <p>WHEREAS, the Client desires to avail recruitment services, and ${shortCompany} has represented that it possesses the skills, expertise, and resources to provide such services;</p>
@@ -95,7 +94,7 @@ export function generateAgreement(data, letterType = 'Agreement') {
 </div>
 
 <div class="section-block">
-<h4 style="color: #3b82f6; margin-top: 25px; margin-bottom: 8px; font-size: 13px; text-transform: uppercase;">1. CONTRACT TERM</h4>
+<h4 style="color: #000000; margin-top: 25px; margin-bottom: 8px; font-size: 13px; text-transform: uppercase;">1. CONTRACT TERM</h4>
 <ul style="list-style-type: disc; margin-left: 15px; padding-left: 15px; margin-top: 0;">
 <li>This Agreement shall remain valid for 12 months from the date of signing unless terminated earlier as per Clause 11.</li>
 <li>Upon expiry, this Agreement may be extended by mutual written consent.</li>
@@ -104,7 +103,7 @@ export function generateAgreement(data, letterType = 'Agreement') {
 </div>
 
 <div class="section-block">
-<h4 style="color: #3b82f6; margin-top: 25px; margin-bottom: 8px; font-size: 13px; text-transform: uppercase;">2. PROFESSIONAL FEES</h4>
+<h4 style="color: #000000; margin-top: 25px; margin-bottom: 8px; font-size: 13px; text-transform: uppercase;">2. PROFESSIONAL FEES</h4>
 <ul style="list-style-type: disc; margin-left: 15px; padding-left: 15px; margin-top: 0;">
 <li>The Client shall pay ${shortCompany} professional charges as follows:</li>
 <li>All Levels &ndash; <strong>${percentage}%</strong> of Annual CTC (Applicable GST extra).</li>
@@ -113,7 +112,7 @@ export function generateAgreement(data, letterType = 'Agreement') {
 </div>
 
 <div class="section-block">
-<h4 style="color: #3b82f6; margin-top: 25px; margin-bottom: 8px; font-size: 13px; text-transform: uppercase;">3. SERVICE METHODOLOGY</h4>
+<h4 style="color: #000000; margin-top: 25px; margin-bottom: 8px; font-size: 13px; text-transform: uppercase;">3. SERVICE METHODOLOGY</h4>
 <ul style="list-style-type: disc; margin-left: 15px; padding-left: 15px; margin-top: 0;">
 <li>The Client shall share requirements via email/telephone.</li>
 <li>${shortCompany} shall confirm within 7 working days its ability to provide candidates.</li>
@@ -126,7 +125,7 @@ export function generateAgreement(data, letterType = 'Agreement') {
 </div>
 
 <div class="section-block">
-<h4 style="color: #3b82f6; margin-top: 25px; margin-bottom: 8px; font-size: 13px; text-transform: uppercase;">4. INVOICES &amp; PAYMENT TERMS</h4>
+<h4 style="color: #000000; margin-top: 25px; margin-bottom: 8px; font-size: 13px; text-transform: uppercase;">4. INVOICES &amp; PAYMENT TERMS</h4>
 <ul style="list-style-type: disc; margin-left: 15px; padding-left: 15px; margin-top: 0;">
 <li>On confirmation of candidate joining, ${shortCompany} shall raise an invoice <strong>${invoicePostJoining} days</strong> post joining.</li>
 <li>The Client shall process payment within <strong>${paymentRelease} days</strong> of invoice date, after deduction of applicable taxes.</li>
@@ -137,7 +136,7 @@ export function generateAgreement(data, letterType = 'Agreement') {
 </div>
 
 <div class="section-block">
-<h4 style="color: #3b82f6; margin-top: 25px; margin-bottom: 8px; font-size: 13px; text-transform: uppercase;">5. REPLACEMENT GUARANTEE</h4>
+<h4 style="color: #000000; margin-top: 25px; margin-bottom: 8px; font-size: 13px; text-transform: uppercase;">5. REPLACEMENT GUARANTEE</h4>
 <ul style="list-style-type: disc; margin-left: 15px; padding-left: 15px; margin-top: 0;">
 <li>If a candidate absconds in <strong>${replacement} Days</strong> replacement is applicable and ${shortCompany} shall provide a replacement within 10 working days.</li>
 <li>If the candidate is terminated due to misconduct, breach of confidentiality, or non-performance by the company after <strong>60 days</strong>, ${shortCompany} shall not provide a replacement, but, if he is terminated in 60 Days ${shortCompany.toLowerCase()} will provide replacement.</li>
@@ -148,7 +147,7 @@ export function generateAgreement(data, letterType = 'Agreement') {
 </div>
 
 <div class="section-block">
-<h4 style="color: #3b82f6; margin-top: 25px; margin-bottom: 8px; font-size: 13px; text-transform: uppercase;">6. RESPONSIBILITIES OF ${shortCompany.toUpperCase()}</h4>
+<h4 style="color: #000000; margin-top: 25px; margin-bottom: 8px; font-size: 13px; text-transform: uppercase;">6. RESPONSIBILITIES OF ${shortCompany.toUpperCase()}</h4>
 <ul style="list-style-type: disc; margin-left: 15px; padding-left: 15px; margin-top: 0;">
 <li>Deliver services diligently and promote the Client&rsquo;s interests.</li>
 <li>Not forward selected candidates to other clients until released by the Client.</li>
@@ -158,7 +157,7 @@ export function generateAgreement(data, letterType = 'Agreement') {
 </div>
 
 <div class="section-block">
-<h4 style="color: #3b82f6; margin-top: 25px; margin-bottom: 8px; font-size: 13px; text-transform: uppercase;">7. CONFIDENTIALITY &amp; NON-SOLICITATION</h4>
+<h4 style="color: #000000; margin-top: 25px; margin-bottom: 8px; font-size: 13px; text-transform: uppercase;">7. CONFIDENTIALITY &amp; NON-SOLICITATION</h4>
 <ul style="list-style-type: disc; margin-left: 15px; padding-left: 15px; margin-top: 0;">
 <li>${shortCompany} shall not disclose Client&rsquo;s confidential information or business practices.</li>
 <li>${shortCompany} shall not solicit or influence Client employees.</li>
@@ -167,14 +166,14 @@ export function generateAgreement(data, letterType = 'Agreement') {
 </div>
 
 <div class="section-block">
-<h4 style="color: #3b82f6; margin-top: 25px; margin-bottom: 8px; font-size: 13px; text-transform: uppercase;">8. NON-ASSIGNMENT</h4>
+<h4 style="color: #000000; margin-top: 25px; margin-bottom: 8px; font-size: 13px; text-transform: uppercase;">8. NON-ASSIGNMENT</h4>
 <ul style="list-style-type: disc; margin-left: 15px; padding-left: 15px; margin-top: 0;">
 <li>This Agreement shall not be assigned by ${shortCompany} to any third party without prior written consent of the Client.</li>
 </ul>
 </div>
 
 <div class="section-block">
-<h4 style="color: #3b82f6; margin-top: 25px; margin-bottom: 8px; font-size: 13px; text-transform: uppercase;">9. DISPUTE RESOLUTION &amp; ARBITRATION</h4>
+<h4 style="color: #000000; margin-top: 25px; margin-bottom: 8px; font-size: 13px; text-transform: uppercase;">9. DISPUTE RESOLUTION &amp; ARBITRATION</h4>
 <ul style="list-style-type: disc; margin-left: 15px; padding-left: 15px; margin-top: 0;">
 <li>Any dispute shall be referred to arbitration under the Arbitration and Conciliation Act, 1996.</li>
 <li>A sole arbitrator shall be appointed with mutual consent.</li>
@@ -183,14 +182,14 @@ export function generateAgreement(data, letterType = 'Agreement') {
 </div>
 
 <div class="section-block">
-<h4 style="color: #3b82f6; margin-top: 25px; margin-bottom: 8px; font-size: 13px; text-transform: uppercase;">10. GOVERNING LAW &amp; JURISDICTION</h4>
+<h4 style="color: #000000; margin-top: 25px; margin-bottom: 8px; font-size: 13px; text-transform: uppercase;">10. GOVERNING LAW &amp; JURISDICTION</h4>
 <ul style="list-style-type: disc; margin-left: 15px; padding-left: 15px; margin-top: 0;">
 <li>This Agreement shall be governed by the laws of India. Courts at Hyderabad and Secunderabad shall have exclusive jurisdiction.</li>
 </ul>
 </div>
 
 <div class="section-block">
-<h4 style="color: #3b82f6; margin-top: 25px; margin-bottom: 8px; font-size: 13px; text-transform: uppercase;">11. TERMINATION</h4>
+<h4 style="color: #000000; margin-top: 25px; margin-bottom: 8px; font-size: 13px; text-transform: uppercase;">11. TERMINATION</h4>
 <ul style="list-style-type: disc; margin-left: 15px; padding-left: 15px; margin-top: 0;">
 <li>Either Party may terminate this Agreement with 30 days&rsquo; prior written notice.</li>
 <li>The Client may terminate immediately without notice if ${shortCompany} breaches terms.</li>
@@ -199,13 +198,13 @@ export function generateAgreement(data, letterType = 'Agreement') {
 </div>
 
 <div class="section-block">
-<h4 style="color: #3b82f6; margin-top: 25px; margin-bottom: 8px; font-size: 13px; text-transform: uppercase;">12. ENTIRE AGREEMENT</h4>
+<h4 style="color: #000000; margin-top: 25px; margin-bottom: 8px; font-size: 13px; text-transform: uppercase;">12. ENTIRE AGREEMENT</h4>
 <ul style="list-style-type: disc; margin-left: 15px; padding-left: 15px; margin-top: 0;">
 <li>This Agreement constitutes the entire understanding between the Parties and supersedes all prior discussions. Any amendments shall be in writing and signed by both Parties.</li>
 </ul>
 </div>
 
-<p style="margin-bottom: 20px;"><strong>IN WITNESS WHEREOF,</strong> the Parties hereto have executed this Agreement on the date first above written.</p>
+<p style="margin-top: 35px; margin-bottom: 20px; text-align: left;"><strong>IN WITNESS WHEREOF,</strong> the Parties hereto have executed this Agreement on the date first above written.</p>
 
 <table class="signature-table" style="width: 100%; border: none; border-collapse: collapse; margin-top: 20px;">
 <tbody>
