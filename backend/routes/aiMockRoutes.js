@@ -681,19 +681,27 @@ router.post("/admin/create-session", async (req, res) => {
   });
 
   const linkUrl = `/index.html?session_id=${linkId}`;
-  const emailSent = await sendInterviewEmail({
+  
+  // Dispatch in background to avoid blocking the recruiter
+  sendInterviewEmail({
     candidateEmail: req.body.candidate_email,
     candidateName: req.body.candidate_name,
     linkUrl,
     duration: Number(req.body.interview_duration || 30),
-    jobDescription: req.body.job_description || ""
+    jobDescription: req.body.job_description || "",
+    resumeText: req.body.resume_text || ""
+  }).then(sent => {
+    if (sent) console.log(`[Email] Invitation sent asynchronously to: ${req.body.candidate_email}`);
+    else console.error(`[Email] Async invitation FAILED for: ${req.body.candidate_email}`);
+  }).catch(err => {
+    console.error(`[Email] Async error for ${req.body.candidate_email}:`, err.message);
   });
 
   res.json({
     status: "success",
     link_id: linkId,
     link_url: linkUrl,
-    email_sent: emailSent
+    email_sent: true // Backgrounded
   });
 });
 

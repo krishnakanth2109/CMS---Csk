@@ -4,6 +4,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import * as XLSX from "xlsx";
+import { Document, Packer, Paragraph, ImageRun, TextRun } from "docx";
+
 
 import {
   BuildingOfficeIcon,
@@ -200,7 +202,7 @@ const AdminClientInvoice = () => {
   }, [form.actualSalary, form.percentage]);
 
   /* PDF Generation Logic Using Exact Provided PDF as Background Template */
-  const generateFilledPdf = async () => {
+  const generateFilledPdf = async (docxMode = false) => {
     setIsGenerating(true);
     try {
       // 1. Fetch the exact empty PDF provided
@@ -218,16 +220,35 @@ const AdminClientInvoice = () => {
 
       const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
       const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+      
+      const docxTextFrames = [];
+      const px = (pt) => Math.round(pt * 20);
 
       const drawText = (text, x, y, size = 9.5, isBold = false) => {
         if (!text || text === "undefined") return;
-        firstPage.drawText(String(text).trim(), {
-          x,
-          y: height - y - (size / 3), 
-          size,
-          color: rgb(0, 0, 0),
-          font: isBold ? helveticaBold : helvetica,
-        });
+        if (docxMode) {
+           docxTextFrames.push(
+            new Paragraph({
+              children: [
+                new TextRun({ text: String(text).trim(), size: size * 2, bold: isBold, font: "Helvetica" })
+              ],
+              frame: {
+                position: { x: px(x), y: px(y) },
+                anchor: { horizontal: "page", vertical: "page" },
+                width: px(500), height: px(size + 6),
+                wrap: "none"
+              }
+            })
+           );
+        } else {
+           firstPage.drawText(String(text).trim(), {
+             x,
+             y: height - y - (size / 3), 
+             size,
+             color: rgb(0, 0, 0),
+             font: isBold ? helveticaBold : helvetica,
+           });
+        }
       };
 
       const drawTextCentered = (text, centerX, y, maxW, isBold = false, size = 9.5) => {
@@ -241,13 +262,31 @@ const AdminClientInvoice = () => {
           w = font.widthOfTextAtSize(t, sz);
         }
         const x = centerX - (w / 2);
-        firstPage.drawText(t, {
-          x,
-          y: height - y - (sz / 3),
-          size: sz,
-          color: rgb(0, 0, 0),
-          font,
-        });
+        
+        if (docxMode) {
+           docxTextFrames.push(
+            new Paragraph({
+              children: [
+                new TextRun({ text: t, size: sz * 2, bold: isBold, font: "Helvetica" })
+              ],
+              alignment: "center",
+              frame: {
+                position: { x: px(centerX - maxW/2), y: px(y) },
+                anchor: { horizontal: "page", vertical: "page" },
+                width: px(maxW), height: px(sz + 6),
+                wrap: "none"
+              }
+            })
+           );
+        } else {
+           firstPage.drawText(t, {
+             x,
+             y: height - y - (sz / 3),
+             size: sz,
+             color: rgb(0, 0, 0),
+             font,
+           });
+        }
       };
 
       // == 3. MAP ALL THE DATA ONTO THE TEMPLATE COORDINATES ==
@@ -306,7 +345,7 @@ const AdminClientInvoice = () => {
       });
 
       // -- Date: Aligned with template --
-      drawText(getOrdinalDate(form.invoiceDate), 468, 118, 10);
+      drawText(getOrdinalDate(form.invoiceDate), 468, 118, 10, true);
 
       // -- Deep Clean of Template Table Layer --
       // Using a slightly wider and taller mask to catch all border artifacts
@@ -383,7 +422,7 @@ const AdminClientInvoice = () => {
         }
 
         drawCell(c.role || "", colStarts[2], colWidths[2], currentY, rowDR);
-        drawCell(c.joiningDate ? getOrdinalDate(c.joiningDate) : "", colStarts[3], colWidths[3], currentY, rowDR);
+        drawCell(c.joiningDate ? getOrdinalDate(c.joiningDate) : "", colStarts[3], colWidths[3], currentY, rowDR, 'center', true);
         drawCell(Number(c.actualSalary || 0).toLocaleString("en-IN"), colStarts[4], colWidths[4], currentY, rowDR);
         drawCell(`${c.percentage || 0}%`, colStarts[5], colWidths[5], currentY, rowDR);
         drawCell(Number(c.payment || 0).toLocaleString("en-IN"), colStarts[6], colWidths[6], currentY, rowDR);
@@ -445,7 +484,7 @@ const AdminClientInvoice = () => {
       }
 
       // -- Signature Block (Left Aligned) --
-      const sigOffset = form.accountType !== "no" ? (accSpacing * 8) + 15 : 20;
+      const sigOffset = form.accountType !== "no" ? (accSpacing * 10) + 30 : 60;
       const sigY = accY + sigOffset;
       drawText("Navya S", 68, sigY, 11, true);
       drawText("Vagarious Solutions Pvt Ltd", 68, sigY + 16, 11, true);
@@ -453,6 +492,7 @@ const AdminClientInvoice = () => {
       // 4. Save and return blob
       const pdfBytes = await pdfDoc.save();
       const blob = new Blob([pdfBytes], { type: "application/pdf" });
+      if (docxMode) return { blob, docxTextFrames };
       return blob;
 
     } catch (error) {
@@ -486,7 +526,7 @@ const AdminClientInvoice = () => {
         link.click();
       }
     } else if (downloadFormat === 'word') {
-      downloadAsWord();
+      await downloadAsWord();
     } else if (downloadFormat === 'excel') {
       downloadAsExcel();
     }
@@ -539,99 +579,89 @@ const AdminClientInvoice = () => {
     toast({ title: "Invoice downloaded as Excel" });
   };
 
-  const downloadAsWord = () => {
-    let totalPay = 0;
-    const cands = form.selectedCandidates.length > 0 ? form.selectedCandidates : (form.candidateName ? [{name: form.candidateName, role: form.role, joiningDate: form.joiningDate, actualSalary: form.actualSalary, percentage: form.percentage, payment: form.payment}] : []);
-    
-    let rowsHtml = "";
-    cands.forEach((c, i) => {
-        totalPay += parseFloat(c.payment) || 0;
-        rowsHtml += `<tr>
-            <td style="border: 1px solid black; padding: 8px;">${i + 1}</td>
-            <td style="border: 1px solid black; padding: 8px;">${c.name}</td>
-            <td style="border: 1px solid black; padding: 8px;">${c.role}</td>
-            <td style="border: 1px solid black; padding: 8px;">${getOrdinalDate(c.joiningDate)}</td>
-            <td style="border: 1px solid black; padding: 8px;">${c.actualSalary}</td>
-            <td style="border: 1px solid black; padding: 8px;">${c.percentage || 0}%</td>
-            <td style="border: 1px solid black; padding: 8px;">${c.payment}</td>
-        </tr>`;
-    });
+  const downloadAsWord = async () => {
+    setIsGenerating(true);
+    try {
+      // Step 1: Generate the PDF base layer (without text) and get DOCX text frames
+      const { blob: pdfBlob, docxTextFrames } = await generateFilledPdf(true);
+      if (!pdfBlob) throw new Error("Failed to generate PDF for Word conversion");
+      
+      const pdfjsLib = await import('pdfjs-dist');
+      const workerModule = await import('pdfjs-dist/build/pdf.worker.min.mjs?url');
+      pdfjsLib.GlobalWorkerOptions.workerSrc = workerModule.default;
 
-    const totalCgstAmt = Math.round((totalPay * parseFloat(form.cgstPercentage || 0)) / 100);
-    const totalSgstAmt = Math.round((totalPay * parseFloat(form.sgstPercentage || 0)) / 100);
-    const grandTotalAmt = totalPay + totalCgstAmt + totalSgstAmt;
+      const pdfArrayBuffer = await pdfBlob.arrayBuffer();
+      const pdfDoc = await pdfjsLib.getDocument({ data: pdfArrayBuffer }).promise;
+      const page = await pdfDoc.getPage(1);
 
-    const htmlContent = `
-      <div style="font-family: 'Helvetica', Arial, sans-serif; font-size: 12px; color: #000;">
-         <h2 style="text-align: center; margin-bottom: 20px;">TAX INVOICE</h2>
-         <table style="width: 100%; border: none;">
-            <tr>
-               <td><strong>Invoice Number:</strong> ${form.invoiceNumber}</td>
-               <td style="text-align: right;"><strong>Date:</strong> ${getOrdinalDate(form.invoiceDate)}</td>
-            </tr>
-         </table>
-         <br/>
-         <p><strong>To:</strong><br/>
-         ${selectedClient?.companyName || ""}<br/>
-         ${selectedClient?.address || ""}<br/>
-         <strong>GST:</strong> ${selectedClient?.gstNumber || ""}
-         </p>
-         <br/>
-         <table style="width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 11px;">
-            <thead>
-               <tr style="background-color: #f8f9fa;">
-                  <th style="border: 1px solid black; padding: 8px;">S.No</th>
-                  <th style="border: 1px solid black; padding: 8px;">Candidate Name</th>
-                  <th style="border: 1px solid black; padding: 8px;">Role</th>
-                  <th style="border: 1px solid black; padding: 8px;">Joining</th>
-                  <th style="border: 1px solid black; padding: 8px;">Salary (Rs)</th>
-                  <th style="border: 1px solid black; padding: 8px;">Pct (%)</th>
-                  <th style="border: 1px solid black; padding: 8px;">Payment</th>
-               </tr>
-            </thead>
-            <tbody>
-               ${rowsHtml}
-               <tr>
-                  <td colspan="6" style="border: 1px solid black; padding: 8px; text-align: right;"><strong>CGST (${form.cgstPercentage || 0}%)</strong></td>
-                  <td style="border: 1px solid black; padding: 8px;">${totalCgstAmt}</td>
-               </tr>
-               <tr>
-                  <td colspan="6" style="border: 1px solid black; padding: 8px; text-align: right;"><strong>SGST (${form.sgstPercentage || 0}%)</strong></td>
-                  <td style="border: 1px solid black; padding: 8px;">${totalSgstAmt}</td>
-               </tr>
-               <tr>
-                  <td colspan="6" style="border: 1px solid black; padding: 8px; text-align: right;"><strong>Grand Total</strong></td>
-                  <td style="border: 1px solid black; padding: 8px;"><strong>${grandTotalAmt}</strong></td>
-               </tr>
-            </tbody>
-         </table>
-         <br/>
-         <p><strong>In Words:</strong> ${numberToWords(grandTotalAmt).toUpperCase()}</p>
-         <br/><br/>
-         <p style="text-align: right; width: 100%;">
-            Navya S<br/>
-            Vagarious Solutions Pvt Ltd
-         </p>
-      </div>
-    `;
+      // Render at a high scale to preserve all text sharpness of the generated PDF
+      const scale = 2.0;
+      const viewport = page.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const ctx = canvas.getContext('2d');
+      await page.render({ canvasContext: ctx, viewport }).promise;
+      
+      // Convert the rendered canvas to a Blob, then to an ArrayBuffer for the docx library
+      const imageBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+      const imageArrayBuffer = await imageBlob.arrayBuffer();
 
-    const preHtml = "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Export HTML To Doc</title></head><body>";
-    const postHtml = "</body></html>";
-    const fullHtml = preHtml + htmlContent + postHtml;
+      // Define standard docx page properties
+      const { Header, HorizontalPositionRelativeFrom, HorizontalPositionAlign, VerticalPositionRelativeFrom, VerticalPositionAlign } = await import("docx");
 
-    const blob = new Blob(['\ufeff', fullHtml], {
-        type: 'application/msword'
-    });
-    
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `Invoice_${form.invoiceNumber}.doc`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    toast({ title: "Invoice downloaded as Word Document" });
+      // Step 2: Use docx library to construct a native Word document containing explicit text frames layered over background image
+      const doc = new Document({
+        sections: [
+          {
+            properties: {
+              page: { margin: { top: 0, right: 0, bottom: 0, left: 0 } },
+            },
+            headers: {
+              default: new Header({
+                children: [
+                  new Paragraph({
+                    children: [
+                      new ImageRun({
+                        data: imageArrayBuffer,
+                        transformation: { width: 794, height: 1123 },
+                        floating: {
+                          horizontalPosition: { relative: HorizontalPositionRelativeFrom.PAGE, align: HorizontalPositionAlign.LEFT },
+                          verticalPosition: { relative: VerticalPositionRelativeFrom.PAGE, align: VerticalPositionAlign.TOP },
+                          behindDocument: true,
+                        },
+                      }),
+                    ],
+                  }),
+                ],
+              }),
+            },
+            children: docxTextFrames,
+          },
+        ],
+      });
+
+      // Generate docx Blob
+      const docxBlob = await Packer.toBlob(doc);
+
+      // Trigger download
+      const url = URL.createObjectURL(docxBlob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `Invoice_${form.invoiceNumber}.docx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      toast({ title: "Invoice downloaded correctly as a Word (.docx) file" });
+
+    } catch (error) {
+      console.error("Word Generation error:", error);
+      toast({ title: `Word Error: ${error?.message || error}`, variant: "destructive", duration: 7000 });
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   return (

@@ -254,33 +254,33 @@ export const createRecruiter = async (req, res) => {
       firebaseUid: user.firebaseUid,
     });
 
-    // Send Welcome Email to Recruiter
-    try {
-      await sendBrevoEmail({
-        toEmail: email,
-        toName: `${firstName} ${lastName}`,
-        subject: "Welcome to VTS Tracker - Recruiter Account",
-        htmlContent: `
-          <html>
-          <body style="font-family: sans-serif; line-height: 1.6; color: #333;">
-            <h2 style="color: #6366f1;">Welcome ${firstName}!</h2>
-            <p>Your recruiter account has been created successfully in the <b>VTS Tracker</b> portal.</p>
-            <p><b>Your Credentials:</b></p>
-            <ul>
-              <li><b>Email:</b> ${email}</li>
-              <li><b>Password:</b> ${password}</li>
-            </ul>
-            <p>You can login here: <a href="http://localhost:5173/login">VTS Login</a></p>
-            <p>Please change your password after your first login for security.</p>
-            <p>Best Regards,<br/><b>Admin Team - Arah Info Tech</b></p>
-          </body>
-          </html>
-        `
-      });
-      console.log(`[Email] Welcome email sent to recruiter: ${email}`);
-    } catch (err) {
-      console.error('[Email] Failed to send recruiter welcome email:', err.message);
-    }
+    // Send Welcome Email to Recruiter - BACKGROUNDED
+    sendBrevoEmail({
+      toEmail: email,
+      toName: `${firstName} ${lastName}`,
+      subject: "Welcome to VTS Tracker - Recruiter Account",
+      htmlContent: `
+        <html>
+        <body style="font-family: sans-serif; line-height: 1.6; color: #333;">
+          <h2 style="color: #6366f1;">Welcome ${firstName}!</h2>
+          <p>Your recruiter account has been created successfully in the <b>VTS Tracker</b> portal.</p>
+          <p><b>Your Credentials:</b></p>
+          <ul>
+            <li><b>Email:</b> ${email}</li>
+            <li><b>Password:</b> ${password}</li>
+          </ul>
+          <p>You can login here: <a href="http://localhost:5173/login">VTS Login</a></p>
+          <p>Please change your password after your first login for security.</p>
+          <p>Best Regards,<br/><b>Admin Team - Arah Info Tech</b></p>
+        </body>
+        </html>
+      `
+    }).then(sent => {
+      if (sent) console.log(`[Email] Welcome email sent asynchronously to: ${email}`);
+      else console.error(`[Email] Async welcome email delivery FAILED for: ${email}`);
+    }).catch(err => {
+      console.error(`[Email Error] Async welcome email for ${email}:`, err.message);
+    });
   } catch (error) {
     console.error('Create Recruiter Error:', error);
     if (firebaseUid) {

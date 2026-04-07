@@ -1,11 +1,7 @@
-async function sendBrevoEmail({ toEmail, toName, subject, htmlContent }) {
+async function sendBrevoEmail({ toEmail, toName, subject, htmlContent, attachment = [] }) {
   const apiKey = process.env.BREVO_API_KEY;
   const senderName = process.env.BREVO_SENDER_NAME || "Arah Info Tech Pvt ltd";
   const senderEmail = process.env.BREVO_SENDER_EMAIL || "career.arahinfotech@gmail.com";
-
-  console.log(`[Brevo] Preparing email to: ${toEmail}`);
-  console.log(`[Brevo] Sender: ${senderName} <${senderEmail}>`);
-  console.log(`[Brevo] Using API Key: ${apiKey ? (apiKey.slice(0, 10) + "...") : "MISSING"}`);
 
   if (!apiKey || !senderEmail) {
     console.error("[Brevo] CRITICAL: Missing API key or Sender Email.");
@@ -17,10 +13,13 @@ async function sendBrevoEmail({ toEmail, toName, subject, htmlContent }) {
       sender: { name: senderName, email: senderEmail },
       to: [{ email: toEmail, name: toName }],
       subject,
-      htmlContent
+      htmlContent,
+      ...(attachment.length > 0 ? { attachment } : {})
     };
 
-    console.log(`[Brevo] Sending request to API with payload:`, JSON.stringify(payload, null, 2));
+    // Use AbortController for a 20-second timeout to prevent 2-minute hangs
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
 
     const response = await fetch("https://api.brevo.com/v3/smtp/email", {
       method: "POST",
@@ -29,8 +28,11 @@ async function sendBrevoEmail({ toEmail, toName, subject, htmlContent }) {
         "api-key": apiKey,
         "content-type": "application/json"
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+      signal: controller.signal
     });
+
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
@@ -38,23 +40,72 @@ async function sendBrevoEmail({ toEmail, toName, subject, htmlContent }) {
       return false;
     }
 
-    const successData = await response.json().catch(() => ({}));
-    console.log(`[Brevo] SUCCESS: Email sent to ${toEmail}. MessageID: ${successData.messageId || 'N/A'}`);
     return true;
   } catch (error) {
-    console.error("[Brevo] Network/Fetch Error:", error.message);
+    if (error.name === 'AbortError') {
+      console.error("[Brevo] Error: Request timed out after 20 seconds.");
+    } else {
+      console.error("[Brevo] Network/Fetch Error:", error.message);
+    }
     return false;
   }
 }
 
-async function sendInterviewEmail({ candidateEmail, candidateName, linkUrl, duration, jobDescription }) {
+import PDFDocument from 'pdfkit';
+
+async function generatePdfBase64(text, title = "Job Description") {
+  return new Promise((resolve, reject) => {
+    try {
+       const doc = new PDFDocument({ margin: 50 });
+       const chunks = [];
+       doc.on('data', chunk => chunks.push(chunk));
+       doc.on('end', () => resolve(Buffer.concat(chunks).toString('base64')));
+       
+       // PDF Content
+       doc.fillColor('#6366f1').fontSize(24).font('Helvetica-Bold').text(title, { align: 'center' });
+       doc.moveDown(1);
+       doc.strokeColor('#e2e8f0').lineWidth(1).moveTo(50, doc.y).lineTo(550, doc.y).stroke();
+       doc.moveDown(1.5);
+       
+       doc.fillColor('#334155').fontSize(11).font('Helvetica').text(text, {
+         align: 'left',
+         lineGap: 5
+       });
+       
+       doc.end();
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
+
+async function sendInterviewEmail({ candidateEmail, candidateName, linkUrl, duration, jobDescription, resumeText }) {
   const baseUrl = process.env.FRONTEND_URL || "http://localhost:5000";
-  const formattedJd = String(jobDescription || "").replace(/\n/g, "<br/>");
+  
+  // Decide which text to use for the PDF
+  // If jobDescription is not "JD provided via attached file", use it.
+  // Otherwise, use resumeText (which contains the parsed PDF text).
+  const isGenericJdStr = String(jobDescription || "").includes("JD provided via attached file");
+  const finalJdText = isGenericJdStr ? (resumeText || jobDescription) : (jobDescription || resumeText);
+  
+  let attachments = [];
+  if (finalJdText) {
+    try {
+      const base64 = await generatePdfBase64(finalJdText);
+      attachments.push({
+        content: base64,
+        name: "Job_Description.pdf"
+      });
+    } catch (err) {
+      console.error("[Email Service] PDF generation failed", err);
+    }
+  }
 
   return sendBrevoEmail({
     toEmail: candidateEmail,
     toName: candidateName,
     subject: "Interview Invitation by Arah",
+    attachment: attachments,
     htmlContent: `
       <html>
       <body style="font-family: sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
@@ -68,8 +119,7 @@ async function sendInterviewEmail({ candidateEmail, candidateName, linkUrl, dura
           <p>We are excited to invite you to complete an AI-powered technical interview. This assessment will help us understand your skills and experience better.</p>
           
           <div style="margin: 20px 0; padding: 15px; background-color: #f8fafc; border-radius: 12px; border-left: 4px solid #6366f1;">
-            <p style="margin: 5px 0;"><b>Role Description:</b></p>
-            <div style="color: #475569; font-size: 0.95rem; margin-bottom: 10px;">${formattedJd}</div>
+            <p style="margin: 5px 0;"><b>Important:</b> We have attached the <b>Job Description PDF</b> to this email for your reference.</p>
             <p style="margin: 5px 0;"><b>Interview Duration:</b> <span style="color: #6366f1; font-weight: bold;">${duration} minutes</span></p>
           </div>
 

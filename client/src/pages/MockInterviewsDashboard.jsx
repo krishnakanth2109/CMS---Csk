@@ -282,12 +282,8 @@ export default function MockInterviewsDashboard() {
 
   const handleCreateSession = async (e) => {
     e.preventDefault();
-    if (!candidateName && !resumeFile) {
-      toast({ title: 'Validation Error', description: 'Please provide candidate name or upload a resume.', variant: 'destructive' });
-      return;
-    }
-    if (!jobDescription) {
-      toast({ title: 'Validation Error', description: 'Please provide a job description.', variant: 'destructive' });
+    if (!jobDescription && !resumeFile) {
+      toast({ title: 'Validation Error', description: 'Please provide either a Job Description or upload a context file (PDF).', variant: 'destructive' });
       return;
     }
 
@@ -306,7 +302,7 @@ export default function MockInterviewsDashboard() {
           headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
           body: formData
         });
-        if (!uploadRes.ok) throw new Error('Failed to parse resume');
+        if (!uploadRes.ok) throw new Error('Failed to parse file');
         const uploadData = await uploadRes.json();
         parsedResumeText = uploadData.text;
 
@@ -321,7 +317,7 @@ export default function MockInterviewsDashboard() {
       }
 
       if (!finalName || !finalEmail) {
-        throw new Error('Candidate Name and Email are still required. The resume did not contain them.');
+        throw new Error('Candidate Name and Email are still required. Please fill them manually or ensure the file contains them.');
       }
 
       const data = await apiFetch('/admin/create-session', {
@@ -330,7 +326,7 @@ export default function MockInterviewsDashboard() {
         body: JSON.stringify({
           candidate_name: finalName,
           candidate_email: finalEmail,
-          job_description: jobDescription,
+          job_description: jobDescription || 'JD provided via attached file',
           admin_id: currentUser?._id || currentUser?.id || 'admin_user',
           admin_name: currentUser?.name || 'Admin',
           interview_duration: parseInt(duration),
@@ -982,29 +978,63 @@ export default function MockInterviewsDashboard() {
                 </div>
               </div>
 
-              <div>
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">Upload Resume (PDF)</label>
-                <input type="file" accept=".pdf,.doc,.docx" onChange={e => setResumeFile(e.target.files[0])} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:border-indigo-500" />
-              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
+                <div className="flex flex-col">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-3 flex items-center gap-2">
+                    <Download className="w-3.5 h-3.5 text-indigo-400" />
+                    Attach PDF (Job Description / Resume)
+                  </label>
+                  <div className="relative group border-2 border-dashed border-gray-200 rounded-3xl p-8 hover:border-indigo-400 hover:bg-indigo-50/10 transition-all text-center flex-1 flex flex-col justify-center cursor-pointer min-h-[200px]">
+                    <input 
+                      type="file" 
+                      accept=".pdf" 
+                      onChange={e => setResumeFile(e.target.files[0])} 
+                      className="absolute inset-0 opacity-0 cursor-pointer z-10" 
+                    />
+                    <div className="flex flex-col items-center gap-4">
+                      <div className={`p-5 rounded-full transition-all shadow-sm ${resumeFile ? 'bg-emerald-500 text-white' : 'bg-white text-indigo-500 border border-indigo-100'}`}>
+                        {resumeFile ? <CheckCircle2 className="w-9 h-9" /> : <Plus className="w-9 h-9" />}
+                      </div>
+                      <div className="space-y-1.5">
+                        <p className="text-sm font-black text-slate-800 max-w-[220px] truncate mx-auto transition-colors">
+                          {resumeFile ? resumeFile.name : 'Choose PDF Document'}
+                        </p>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-loose">
+                          {resumeFile ? 'Ready to process' : 'Or drag and drop here'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
-              <div>
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2 flex justify-between">
-                  <span>Job Description <span className="text-red-500">*</span></span>
-                </label>
-                <div className="relative">
-                  <Briefcase className="absolute left-3 top-4 w-4 h-4 text-gray-400" />
-                  <textarea rows="4" value={jobDescription} onChange={e => setJobDescription(e.target.value)} className="w-full pl-10 pr-4 py-3 bg-gray-50 focus:bg-white border border-gray-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 rounded-xl text-sm font-medium transition-all resize-none" placeholder="Paste full job description requirements here..." />
+                <div className="flex flex-col">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-3 flex justify-between">
+                    <span className="flex items-center gap-2">
+                      <Briefcase className="w-3.5 h-3.5 text-indigo-400" />
+                      Job Description Text {!resumeFile && <span className="text-red-500">*</span>}
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-black px-2 py-0.5 bg-slate-50 rounded italic whitespace-nowrap">OPTIONAL IF FILE IS ATTACHED</span>
+                  </label>
+                  <div className="relative flex-1">
+                    <textarea 
+                      rows="8" 
+                      value={jobDescription} 
+                      onChange={e => setJobDescription(e.target.value)} 
+                      className="w-full h-full pl-4 pr-4 py-5 bg-gray-50 focus:bg-white border border-gray-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 rounded-3xl text-sm font-medium transition-all resize-none shadow-sm placeholder:text-slate-300" 
+                      placeholder="Paste full job description requirements here if no file is provided..." 
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div className="pt-4">
-                <button type="submit" disabled={isSubmitting} className="w-full bg-[#283086] hover:bg-black text-white px-6 py-4 rounded-xl font-bold flex items-center justify-center gap-3 shadow-xl hover:shadow-2xl transition-all hover:-translate-y-1 disabled:opacity-70 disabled:hover:translate-y-0 disabled:hover:shadow-xl">
+              <div className="pt-6">
+                <button type="submit" disabled={isSubmitting} className="w-full bg-[#283086] hover:bg-black text-white px-6 py-5 rounded-2xl font-bold flex items-center justify-center gap-3 shadow-xl hover:shadow-2xl transition-all hover:-translate-y-1 disabled:opacity-70 disabled:hover:translate-y-0 disabled:hover:shadow-xl">
                   {isSubmitting ? (
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   ) : (
                     <>
-                      <Send className="w-5 h-5" />
-                      <span>Dispatch Secure Interview Link</span>
+                      <Send className="w-6 h-6" />
+                      <span className="text-lg">Generate Interview Link</span>
                     </>
                   )}
                 </button>
