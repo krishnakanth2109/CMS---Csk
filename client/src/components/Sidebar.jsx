@@ -65,7 +65,7 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
       { name: 'Messages',           path: '/admin/messages',      icon: MessageSquare },
       { name: 'Agreements',       path: '/admin/agreements',    icon: Handshake },
       { name: 'Mock Interviews',    path: '/admin/mock',          icon: Video },
-      { name: 'Offer Letters',      isExternal: true, url: 'https://automated-offer-letter-generator-mocha.vercel.app/?jr_id=l_4387424181',     icon: FileText }, 
+      // { name: 'Offer Letters',      isExternal: true, url: 'https://automated-offer-letter-generator-mocha.vercel.app/?jr_id=l_4387424181',     icon: FileText }, 
 
       { name: 'Reports',            path: '/admin/reports',       icon: BarChart3 },
       { name: 'Settings',           path: '/admin/settings',      icon: Settings },
