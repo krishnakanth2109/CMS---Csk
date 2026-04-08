@@ -254,6 +254,8 @@ export const createRecruiter = async (req, res) => {
       firebaseUid: user.firebaseUid,
     });
 
+    const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:5174').replace(/\/$/, '');
+
     // Send Welcome Email to Recruiter - BACKGROUNDED
     sendBrevoEmail({
       toEmail: email,
@@ -269,7 +271,7 @@ export const createRecruiter = async (req, res) => {
             <li><b>Email:</b> ${email}</li>
             <li><b>Password:</b> ${password}</li>
           </ul>
-          <p>You can login here: <a href="http://localhost:5173/login">VTS Login</a></p>
+          <p>You can login here: <a href="${frontendUrl}/login">VTS Login</a></p>
           <p>Please change your password after your first login for security.</p>
           <p>Best Regards,<br/><b>Admin Team - Arah Info Tech</b></p>
         </body>

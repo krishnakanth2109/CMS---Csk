@@ -41,13 +41,19 @@ if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 const app        = express();
 const httpServer = createServer(app);
 
+const FRONTEND_URL = (process.env.FRONTEND_URL || 'http://localhost:5174').trim().replace(/\/$/, '');
+
 // ─────────────────────────────────────────────────────────────────────────────
-// FIX: Added 'vagarious-cms.netlify.app' to CORS allowed origins.
+// FIX: Use configured FRONTEND_URL and avoid collisions with other local projects.
 // ─────────────────────────────────────────────────────────────────────────────
 const ALLOWED_ORIGINS = [
+  FRONTEND_URL,
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:5174',
+  'http://127.0.0.1:5174',
   'https://vagarious-cms.netlify.app',
   'https://cms-vagarious.netlify.app',
-  'http://localhost:5173',
   'http://localhost:5000',
   'http://localhost:8080',
   'http://127.0.0.1:8080',

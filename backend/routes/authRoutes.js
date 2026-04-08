@@ -23,11 +23,11 @@ const getRawFrontendUrl = () => {
 
   if (!url) {
     // Fallback to localhost for local development
-    console.warn('[send-otp] ⚠  FRONTEND_URL is not set in .env — defaulting to http://localhost:5173');
-    return 'http://localhost:5173';
+    console.warn('[send-otp] ⚠  FRONTEND_URL is not set in .env — defaulting to http://localhost:5174');
+    return 'http://localhost:5174';
   }
 
-  // Add scheme if missing  (e.g. "localhost:5173" → "http://localhost:5173")
+  // Add scheme if missing  (e.g. "localhost:5174" → "http://localhost:5174")
   if (!url.startsWith('http://') && !url.startsWith('https://')) {
     const fixed = `http://${url}`;
     console.warn(`[send-otp] ⚠  FRONTEND_URL missing scheme — auto-corrected to: ${fixed}`);
