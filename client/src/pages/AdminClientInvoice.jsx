@@ -4,7 +4,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import * as XLSX from "xlsx";
-import { Paragraph, TextRun } from "docx";
 
 
 import {
@@ -213,7 +212,7 @@ const AdminClientInvoice = () => {
   }, [form.actualSalary, form.percentage]);
 
   /* PDF Generation Logic Using Exact Provided PDF as Background Template */
-  const generateFilledPdf = async (docxMode = false) => {
+  const generateFilledPdf = async () => {
     setIsGenerating(true);
     try {
       // 1. Fetch the exact empty PDF provided
@@ -232,34 +231,15 @@ const AdminClientInvoice = () => {
       const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
       const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
       
-      const docxTextFrames = [];
-      const px = (pt) => Math.round(pt * 20);
-
       const drawText = (text, x, y, size = 9.5, isBold = false) => {
         if (!text || text === "undefined") return;
-        if (docxMode) {
-           docxTextFrames.push(
-            new Paragraph({
-              children: [
-                new TextRun({ text: String(text).trim(), size: size * 2, bold: isBold, font: "Helvetica" })
-              ],
-              frame: {
-                position: { x: px(x), y: px(y) },
-                anchor: { horizontal: "page", vertical: "page" },
-                width: px(500), height: px(size + 6),
-                wrap: "none"
-              }
-            })
-           );
-        } else {
-           firstPage.drawText(String(text).trim(), {
-             x,
-             y: height - y - (size / 3), 
-             size,
-             color: rgb(0, 0, 0),
-             font: isBold ? helveticaBold : helvetica,
-           });
-        }
+        firstPage.drawText(String(text).trim(), {
+          x,
+          y: height - y - (size / 3),
+          size,
+          color: rgb(0, 0, 0),
+          font: isBold ? helveticaBold : helvetica,
+        });
       };
 
       const drawTextCentered = (text, centerX, y, maxW, isBold = false, size = 9.5) => {
@@ -274,30 +254,13 @@ const AdminClientInvoice = () => {
         }
         const x = centerX - (w / 2);
         
-        if (docxMode) {
-           docxTextFrames.push(
-            new Paragraph({
-              children: [
-                new TextRun({ text: t, size: sz * 2, bold: isBold, font: "Helvetica" })
-              ],
-              alignment: "center",
-              frame: {
-                position: { x: px(centerX - maxW/2), y: px(y) },
-                anchor: { horizontal: "page", vertical: "page" },
-                width: px(maxW), height: px(sz + 6),
-                wrap: "none"
-              }
-            })
-           );
-        } else {
-           firstPage.drawText(t, {
-             x,
-             y: height - y - (sz / 3),
-             size: sz,
-             color: rgb(0, 0, 0),
-             font,
-           });
-        }
+        firstPage.drawText(t, {
+          x,
+          y: height - y - (sz / 3),
+          size: sz,
+          color: rgb(0, 0, 0),
+          font,
+        });
       };
 
       // == 3. MAP ALL THE DATA ONTO THE TEMPLATE COORDINATES ==
@@ -503,7 +466,6 @@ const AdminClientInvoice = () => {
       // 4. Save and return blob
       const pdfBytes = await pdfDoc.save();
       const blob = new Blob([pdfBytes], { type: "application/pdf" });
-      if (docxMode) return { blob, docxTextFrames };
       return blob;
 
     } catch (error) {
