@@ -62,7 +62,7 @@ router.post('/generate', async (req, res) => {
 // sections so the logo repeats on every page, sharp every time.
 router.post('/download-docx', async (req, res) => {
     try {
-        const { html_content } = req.body;
+        const { html_content, is_invoice } = req.body;
 
         const htmlToDocx = (await import('html-to-docx')).default;
         const AdmZip = (await import('adm-zip')).default;
@@ -83,8 +83,11 @@ router.post('/download-docx', async (req, res) => {
             .replace(/<\/ul>/g, '')
             .replace(/<li>/g, '<p style="margin-left: 20px; margin-bottom: 5px;">\u2022 ')
             .replace(/<\/li>/g, '</p>')
-            .replace(/<table[^>]*class="signature-table"[^>]*>/g, '<table cellpadding="5" cellspacing="0">')
-            .replace(/<td[^>]*style="[^"]*"[^>]*>/g, '<td valign="top">');
+            .replace(/<table[^>]*class="signature-table"[^>]*>/g, '<table cellpadding="5" cellspacing="0">');
+        
+        if (!is_invoice) {
+            safeHtml = safeHtml.replace(/<td[^>]*style="[^"]*"[^>]*>/g, '<td valign="top">');
+        }
 
         // BUG FIX: was using \\s+ (literal backslash-s) instead of \s+ for word count
         const wordCount = safeHtml.replace(/<[^>]*>/g, '').split(/\s+/).filter(Boolean).length;
@@ -101,31 +104,33 @@ router.post('/download-docx', async (req, res) => {
         let textDocXml = textZip.readAsText('word/document.xml');
 
         // ── Convert signature table → tab-aligned paragraphs ──
-        const tblMatch = textDocXml.match(/<w:tbl>[\s\S]*?<\/w:tbl>/);
-        if (tblMatch) {
-            const rows = tblMatch[0].match(/<w:tr[\s\S]*?<\/w:tr>/g) || [];
-            let replacementXml = '';
-            const tabPpr = '<w:pPr><w:tabs><w:tab w:val="left" w:pos="5000"/></w:tabs></w:pPr>';
+        if (!is_invoice) {
+            const tblMatch = textDocXml.match(/<w:tbl>[\s\S]*?<\/w:tbl>/);
+            if (tblMatch) {
+                const rows = tblMatch[0].match(/<w:tr[\s\S]*?<\/w:tr>/g) || [];
+                let replacementXml = '';
+                const tabPpr = '<w:pPr><w:tabs><w:tab w:val="left" w:pos="5000"/></w:tabs></w:pPr>';
 
-            for (const row of rows) {
-                const cells = row.match(/<w:tc[\s\S]*?<\/w:tc>/g) || [];
-                if (cells.length < 2) continue;
-                const leftRuns = cells[0].match(/<w:r>[\s\S]*?<\/w:r>/g) || [];
-                const rightRuns = cells[1].match(/<w:r>[\s\S]*?<\/w:r>/g) || [];
-                const hasContent = leftRuns.length > 0 || rightRuns.length > 0;
+                for (const row of rows) {
+                    const cells = row.match(/<w:tc[\s\S]*?<\/w:tc>/g) || [];
+                    if (cells.length < 2) continue;
+                    const leftRuns = cells[0].match(/<w:r>[\s\S]*?<\/w:r>/g) || [];
+                    const rightRuns = cells[1].match(/<w:r>[\s\S]*?<\/w:r>/g) || [];
+                    const hasContent = leftRuns.length > 0 || rightRuns.length > 0;
 
-                if (!hasContent) {
-                    const blank = '<w:p><w:r><w:t xml:space="preserve"> </w:t></w:r></w:p>';
-                    replacementXml += blank.repeat(4);
-                } else {
-                    replacementXml += `<w:p>${tabPpr}`;
-                    replacementXml += leftRuns.join('');
-                    replacementXml += '<w:r><w:tab/></w:r>';
-                    replacementXml += rightRuns.join('');
-                    replacementXml += '</w:p>';
+                    if (!hasContent) {
+                        const blank = '<w:p><w:r><w:t xml:space="preserve"> </w:t></w:r></w:p>';
+                        replacementXml += blank.repeat(4);
+                    } else {
+                        replacementXml += `<w:p>${tabPpr}`;
+                        replacementXml += leftRuns.join('');
+                        replacementXml += '<w:r><w:tab/></w:r>';
+                        replacementXml += rightRuns.join('');
+                        replacementXml += '</w:p>';
+                    }
                 }
+                textDocXml = textDocXml.replace(/<w:tbl>[\s\S]*?<\/w:tbl>/, replacementXml);
             }
-            textDocXml = textDocXml.replace(/<w:tbl>[\s\S]*?<\/w:tbl>/, replacementXml);
         }
 
         // ── Extract all body paragraphs (strip sectPr) ──
@@ -180,48 +185,41 @@ router.post('/download-docx', async (req, res) => {
         // ══════════════════════════════════════════════════
         // ~350 words per page is a safe estimate for A4 with normal margins.
         // Minimum 1 page, maximum capped at 10 to avoid runaway sections.
-        const estimatedPages = Math.min(10, Math.max(1, Math.ceil(wordCount / 350)));
-
-        const allParas = textParagraphs.match(/<w:p\b[\s\S]*?<\/w:p>/g) || [];
-        const parasPerPage = Math.ceil(allParas.length / estimatedPages);
-
-        // ══════════════════════════════════════════════════
-        // STEP 6: Build multi-section body
-        // ══════════════════════════════════════════════════
-        // Structure per section:
-        //   [logoPara]           ← body image, always sharp
-        //   [content paragraphs] ← agreement text for this page
-        //   [sectPr]             ← page break (except last section)
-        //
-        // Word rule: mid-document sectPr must be wrapped in <w:p><w:pPr>...</w:pPr></w:p>
-        // The LAST section's sectPr goes directly in <w:body> (not in a paragraph).
-
         let multiSectionBody = '';
 
-        for (let i = 0; i < estimatedPages; i++) {
-            const chunk = allParas
-                .slice(i * parasPerPage, (i + 1) * parasPerPage)
-                .join('\n');
-
-            const isLast = i === estimatedPages - 1;
-
-            // Page size: A4 (11900 × 16840 twips)
-            // Top margin 2800 = ~2 inches — leaves space below the logo image.
-            // Adjust w:top if your logo is taller/shorter.
-            const pgMar = `w:top="2800" w:right="1000" w:bottom="2080" w:left="1000" w:header="720" w:footer="720" w:gutter="0"`;
+        if (is_invoice) {
+            // For invoices, use a smaller top margin (2200 instead of 2800) to fit more on one page
+            const pgMar = `w:top="2200" w:right="1000" w:bottom="1000" w:left="1000" w:header="720" w:footer="720" w:gutter="0"`;
             const pgSz = `w:w="11900" w:h="16840" w:orient="portrait"`;
-
-            if (isLast) {
-                // Last section: sectPr goes directly in body — no wrapper paragraph
-                multiSectionBody += logoPara + '\n' + chunk + '\n';
-                multiSectionBody += `<w:sectPr>
+            multiSectionBody = logoPara + '\n' + textParagraphs + '\n';
+            multiSectionBody += `<w:sectPr>
   <w:pgSz ${pgSz}/>
   <w:pgMar ${pgMar}/>
 </w:sectPr>`;
-            } else {
-                // Mid-document section: sectPr must be inside <w:p><w:pPr>
-                multiSectionBody += logoPara + '\n' + chunk + '\n';
-                multiSectionBody += `<w:p>
+        } else {
+            const estimatedPages = Math.min(10, Math.max(1, Math.ceil(wordCount / 350)));
+            const allParas = textParagraphs.match(/<w:p\b[\s\S]*?<\/w:p>/g) || [];
+            const parasPerPage = Math.ceil(allParas.length / estimatedPages);
+
+            for (let i = 0; i < estimatedPages; i++) {
+                const chunk = allParas
+                    .slice(i * parasPerPage, (i + 1) * parasPerPage)
+                    .join('\n');
+
+                const isLast = i === estimatedPages - 1;
+
+                const pgMar = `w:top="2800" w:right="1000" w:bottom="2080" w:left="1000" w:header="720" w:footer="720" w:gutter="0"`;
+                const pgSz = `w:w="11900" w:h="16840" w:orient="portrait"`;
+
+                if (isLast) {
+                    multiSectionBody += logoPara + '\n' + chunk + '\n';
+                    multiSectionBody += `<w:sectPr>
+  <w:pgSz ${pgSz}/>
+  <w:pgMar ${pgMar}/>
+</w:sectPr>`;
+                } else {
+                    multiSectionBody += logoPara + '\n' + chunk + '\n';
+                    multiSectionBody += `<w:p>
   <w:pPr>
     <w:sectPr>
       <w:type w:val="nextPage"/>
@@ -230,6 +228,7 @@ router.post('/download-docx', async (req, res) => {
     </w:sectPr>
   </w:pPr>
 </w:p>`;
+                }
             }
         }
 

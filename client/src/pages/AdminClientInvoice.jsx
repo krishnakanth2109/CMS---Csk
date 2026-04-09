@@ -4,7 +4,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import * as XLSX from "xlsx";
-import { Document, Packer, Paragraph, ImageRun, TextRun } from "docx";
+import { Paragraph, TextRun } from "docx";
 
 
 import {
@@ -61,6 +61,17 @@ const numberToWords = (num) => {
   if (n > 0) output += convertGroup(n);
 
   return output.trim() + " Rupees Only";
+};
+
+const triggerFileDownload = (blob, fileName) => {
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
 };
 
 /* ================= Main Component ================= */
@@ -582,36 +593,37 @@ const AdminClientInvoice = () => {
   const downloadAsWord = async () => {
     setIsGenerating(true);
     try {
-      // ══════════════════════════════════════════════════════════════════════
-      // PRODUCTION-GRADE NATIVE WORD DOCUMENT GENERATOR 
-      // ══════════════════════════════════════════════════════════════════════
-
-      // 1. Get the cleanly masked PDF base layer by manually wiping the template
       const response = await fetch('/Empty_invoice.pdf');
       const existingPdfBytes = await response.arrayBuffer();
       const tempPdfDoc = await PDFDocument.load(existingPdfBytes);
       const tempPage = tempPdfDoc.getPages()[0];
       const { height } = tempPage.getSize();
 
-      // Erase legacy "Date:" from right side of template
       tempPage.drawRectangle({
-        x: 350, y: height - 160, width: 230, height: 60,
+        x: 370,
+        y: height - 315,
+        width: 230,
+        height: 40,
         color: rgb(1, 1, 1)
       });
-      // Erase legacy "To" and Address area from left side of template
       tempPage.drawRectangle({
-        x: 50, y: height - 260, width: 220, height: 120,
+        x: 50,
+        y: height - 260,
+        width: 230,
+        height: 125,
         color: rgb(1, 1, 1)
       });
-      // Erase legacy Table and hardcoded invoice text from template
       tempPage.drawRectangle({
-        x: 45, y: height - 760, width: 520, height: 500, 
+        x: 45,
+        y: height - 760,
+        width: 520,
+        height: 500,
         color: rgb(1, 1, 1)
       });
 
       const cleanPdfBytes = await tempPdfDoc.save();
       const pdfBlob = new Blob([cleanPdfBytes], { type: "application/pdf" });
-      
+
       const pdfjsLib = await import('pdfjs-dist');
       const workerModule = await import('pdfjs-dist/build/pdf.worker.min.mjs?url');
       pdfjsLib.GlobalWorkerOptions.workerSrc = workerModule.default;
@@ -619,31 +631,46 @@ const AdminClientInvoice = () => {
       const pdfArrayBuffer = await pdfBlob.arrayBuffer();
       const pdfDoc = await pdfjsLib.getDocument({ data: pdfArrayBuffer }).promise;
       const page = await pdfDoc.getPage(1);
-
-      // Render at super high scale to preserve absolute crispness for logo/watermark
-      const scale = 5.0; // Bumped to 5.0 for razor-sharp vector rasterization
-      const viewport = page.getViewport({ scale });
+      const viewport = page.getViewport({ scale: 5.0 });
       const canvas = document.createElement('canvas');
       canvas.width = viewport.width;
       canvas.height = viewport.height;
       const ctx = canvas.getContext('2d');
+
+      if (!ctx) {
+        throw new Error("Unable to prepare Word background");
+      }
+
       await page.render({ canvasContext: ctx, viewport }).promise;
-      
-      const imageBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png', 1.0));
+
+      const imageBlob = await new Promise((resolve, reject) => {
+        canvas.toBlob((blob) => {
+          if (blob) resolve(blob);
+          else reject(new Error("Failed to build Word background"));
+        }, 'image/png', 1.0);
+      });
       const imageArrayBuffer = await imageBlob.arrayBuffer();
 
       const {
-        Document: DocxDocument, Packer: DocxPacker, Paragraph: DocxParagraph,
-        TextRun: DocxTextRun, ImageRun: DocxImageRun,
-        Table, TableRow, TableCell,
-        WidthType, AlignmentType, VerticalAlign,
-        BorderStyle, Header: DocxHeader,
-        HorizontalPositionRelativeFrom, HorizontalPositionAlign,
-        VerticalPositionRelativeFrom, VerticalPositionAlign,
+        Document: DocxDocument,
+        Packer: DocxPacker,
+        Paragraph: DocxParagraph,
+        TextRun: DocxTextRun,
+        ImageRun: DocxImageRun,
+        Table,
+        TableRow,
+        TableCell,
+        WidthType,
+        AlignmentType,
+        VerticalAlign,
+        BorderStyle,
+        HorizontalPositionRelativeFrom,
+        HorizontalPositionAlign,
+        VerticalPositionRelativeFrom,
+        VerticalPositionAlign,
         TableLayoutType,
       } = await import("docx");
 
-      // Prepare invoice data 
       const cands = form.selectedCandidates.length > 0
         ? form.selectedCandidates
         : (form.candidateName
@@ -651,7 +678,7 @@ const AdminClientInvoice = () => {
           : []);
 
       let totalPay = 0;
-      cands.forEach(c => { totalPay += (parseFloat(c.payment) || 0); });
+      cands.forEach((c) => { totalPay += (parseFloat(c.payment) || 0); });
 
       const totalCgstAmt = Math.round((totalPay * parseFloat(form.cgstPercentage || 0)) / 100);
       const totalSgstAmt = Math.round((totalPay * parseFloat(form.sgstPercentage || 0)) / 100);
@@ -669,8 +696,11 @@ const AdminClientInvoice = () => {
 
       const makeParagraph = (text, opts = {}) => new DocxParagraph({
         children: [makeText(text, opts)],
-        alignment: opts.align === 'right' ? AlignmentType.RIGHT :
-          opts.align === 'center' ? AlignmentType.CENTER : AlignmentType.LEFT,
+        alignment: opts.align === 'right'
+          ? AlignmentType.RIGHT
+          : opts.align === 'center'
+            ? AlignmentType.CENTER
+            : AlignmentType.LEFT,
         spacing: { after: ptToTwip(opts.spaceAfter || 0), before: ptToTwip(opts.spaceBefore || 0) },
       });
 
@@ -699,13 +729,11 @@ const AdminClientInvoice = () => {
 
       const children = [];
 
-      // 1. Insert the Full A4 Background Image natively anchored to the first page BODY paragraph.
-      // This completely prevents MS Word from "fading/blurring" the letterhead colors dynamically (which it always does automatically for standard Headers).
       children.push(new DocxParagraph({
         children: [
           new DocxImageRun({
             data: imageArrayBuffer,
-            transformation: { width: 794, height: 1123 }, // Correct 96 DPI pixel sizing for Word A4
+            transformation: { width: 794, height: 1123 },
             floating: {
               horizontalPosition: {
                 relative: HorizontalPositionRelativeFrom.PAGE,
@@ -716,20 +744,19 @@ const AdminClientInvoice = () => {
                 align: VerticalPositionAlign.TOP,
               },
               behindDocument: true,
-              wrap: { type: 0 }, // No text wrapping
+              wrap: { type: 0 },
             },
           }),
         ],
         spacing: { after: 0, before: 0 },
       }));
 
-      // Align "To" and "Date" flawlessly horizontally using a borderless layout table
       const headerTable = new Table({
         rows: [
           new TableRow({
             children: [
               new TableCell({
-                children: [makeParagraph("To,", { size: 10, bold: true, spaceAfter: 0 })],
+                children: [makeParagraph("", { size: 10, bold: true, spaceAfter: 0 })],
                 borders: noBorders,
                 width: { size: ptToTwip(239), type: WidthType.DXA },
               }),
@@ -748,17 +775,14 @@ const AdminClientInvoice = () => {
       });
 
       children.push(headerTable);
-
-      // Gap under To,
       children.push(makeParagraph("", { size: 4, spaceAfter: 5 }));
-
       children.push(makeParagraph(selectedClient?.companyName || "", { size: 10, bold: true, spaceAfter: 1 }));
 
       if (selectedClient?.contactPerson) {
         children.push(makeParagraph(selectedClient.contactPerson, { size: 9, bold: true, spaceAfter: 1 }));
       }
 
-      addressLines.forEach(line => {
+      addressLines.forEach((line) => {
         children.push(makeParagraph(line, { size: 9, bold: true, spaceAfter: 1 }));
       });
 
@@ -766,27 +790,27 @@ const AdminClientInvoice = () => {
         children.push(makeParagraph(`GST : ${selectedClient.gstNumber}`, { size: 9, bold: true, spaceAfter: 4 }));
       }
 
-      // Invoice Number & Subject
       children.push(new DocxParagraph({ children: [], spacing: { after: ptToTwip(15) } }));
       children.push(makeParagraph(`No: ${form.invoiceNumber}`, { size: 10, bold: true, spaceAfter: 2 }));
       children.push(makeParagraph("SUB: Final Invoice", { size: 10, bold: true, spaceAfter: 6 }));
 
-      // TAX INVOICE Title
       children.push(new DocxParagraph({
         children: [makeText("TAX INVOICE", { size: 12, bold: true })],
         alignment: AlignmentType.CENTER,
         spacing: { after: ptToTwip(6), before: ptToTwip(2) },
       }));
 
-      // Native Real Word Table Construction (Fixing the vertical wrapping bug)
       const colWidthsPt = [28, 105, 80, 75, 70, 50, 70];
       const colWidthsTwip = colWidthsPt.map(w => ptToTwip(w));
 
       const makeCell = (text, colIdx, opts = {}) => new TableCell({
         children: [new DocxParagraph({
           children: [makeText(text, { size: opts.fontSize || 8, bold: opts.bold || false })],
-          alignment: opts.align === 'left' ? AlignmentType.LEFT :
-            opts.align === 'right' ? AlignmentType.RIGHT : AlignmentType.CENTER,
+          alignment: opts.align === 'left'
+            ? AlignmentType.LEFT
+            : opts.align === 'right'
+              ? AlignmentType.RIGHT
+              : AlignmentType.CENTER,
         })],
         width: { size: colWidthsTwip[colIdx], type: WidthType.DXA },
         borders: allBorders,
@@ -842,19 +866,18 @@ const AdminClientInvoice = () => {
           makeSummaryRow(`SGST (${form.sgstPercentage || 0}%)`, totalSgstAmt, false),
           makeSummaryRow("Grand Total", grandTotalAmt, true),
         ],
-        columnWidths: colWidthsTwip, // Fixes Word collapsing columns to zero-width
+        columnWidths: colWidthsTwip,
         width: { size: ptToTwip(478), type: WidthType.DXA },
         layout: TableLayoutType.FIXED,
       });
 
       children.push(invoiceTable);
 
-      // Dynamically scale the font size for massive numbers so it never bleeds off the page!
       const wordsString = numberToWords(grandTotalAmt).toUpperCase();
-      let wordsFontSize = 9; // Default impactful size
-      if (wordsString.length > 55) wordsFontSize = 8;     // Large amount (Lakhs)
-      if (wordsString.length > 75) wordsFontSize = 7.5;   // Huge amount (Tens of Lakhs)
-      if (wordsString.length > 85) wordsFontSize = 7.5;   // Gigantic amount (Crores)
+      let wordsFontSize = 9;
+      if (wordsString.length > 55) wordsFontSize = 8;
+      if (wordsString.length > 75) wordsFontSize = 7.5;
+      if (wordsString.length > 85) wordsFontSize = 7.5;
 
       children.push(new DocxParagraph({
         children: [
@@ -863,6 +886,7 @@ const AdminClientInvoice = () => {
         ],
         spacing: { before: ptToTwip(12), after: ptToTwip(15) },
       }));
+
       if (form.accountType !== "no") {
         children.push(makeParagraph("Account Details: -", { size: 10, bold: true, spaceAfter: 4 }));
 
@@ -876,20 +900,18 @@ const AdminClientInvoice = () => {
           `GST : ${form.accountDetails.gst}`,
         ];
 
-        accDetails.forEach(line => {
+        accDetails.forEach((line) => {
           children.push(makeParagraph(line, { size: 9, bold: true, spaceAfter: 1 }));
         });
       }
 
-      // Signature Block
       children.push(new DocxParagraph({ children: [], spacing: { after: ptToTwip(30) } }));
       children.push(makeParagraph("Navya S", { size: 10, bold: true, spaceAfter: 1 }));
       children.push(makeParagraph("Vagarious Solutions Pvt Ltd", { size: 10, bold: true, spaceAfter: 0 }));
 
-      // Document Assembly
-      const PAGE_W_TWIP = 11906; // A4 Width
-      const PAGE_H_TWIP = 16838; // A4 Height
-      
+      const PAGE_W_TWIP = 11906;
+      const PAGE_H_TWIP = 16838;
+
       const doc = new DocxDocument({
         sections: [
           {
@@ -897,31 +919,22 @@ const AdminClientInvoice = () => {
               page: {
                 size: { width: PAGE_W_TWIP, height: PAGE_H_TWIP },
                 margin: {
-                  top: ptToTwip(135), // Exactly pushes first text to align with the PDF To, height
+                  top: ptToTwip(135),
                   right: ptToTwip(49),
-                  bottom: ptToTwip(40), // Standard bottom margin to clear footer
-                  left: ptToTwip(68), // Strictly match PDF X-coordinate (x=68)
+                  bottom: ptToTwip(40),
+                  left: ptToTwip(68),
                 },
               },
             },
-            children: children,
+            children,
           },
         ],
       });
 
-      // Trigger Download
-      const docxBlob = await DocxPacker.toBlob(doc);
+      const blob = await DocxPacker.toBlob(doc);
+      triggerFileDownload(blob, `Invoice_${form.invoiceNumber}.docx`);
 
-      const url = URL.createObjectURL(docxBlob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `Invoice_${form.invoiceNumber}.docx`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      
-      toast({ title: "Invoice downloaded as Word (.docx) — perfect alignment" });
+      toast({ title: "Invoice downloaded as editable Word" });
 
     } catch (error) {
       console.error("Word Generation error:", error);
