@@ -1014,10 +1014,8 @@ export default function MockInterviewsDashboard() {
                               ) : (
                                 <button
                                   onClick={() => {
-                                    // The interview page is served at /index.html on the backend (port 5000)
-                                    // not /mock/index.html — that path does not exist
-                                    const backendBase = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/api$/, '').replace(/\/$/, '');
-                                    window.open(`${backendBase}/index.html?session_id=${s.link_id}`);
+                                    // Open the interview seamlessly within the CMS using our new route
+                                    window.open(`${window.location.origin}/invite?session_id=${s.link_id}`);
                                   }}
                                   className="bg-white border border-gray-100 text-slate-700 hover:bg-slate-50 px-5 py-2.5 font-black text-xs rounded-lg transition-all shadow-sm flex items-center gap-2 whitespace-nowrap"
                                 >

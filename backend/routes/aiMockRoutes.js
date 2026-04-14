@@ -714,7 +714,7 @@ router.post("/admin/create-session", async (req, res) => {
     status: "pending"
   });
 
-  const linkUrl = `/index.html?session_id=${linkId}`;
+  const linkUrl = `/invite?session_id=${linkId}`;
   
   // Dispatch in background to avoid blocking the recruiter
   sendInterviewEmail({
@@ -771,7 +771,7 @@ router.post("/admin/bulk-create-sessions", async (req, res) => {
 
     await interviewSessions.insertOne(session);
     
-    const linkUrl = `/index.html?session_id=${linkId}`;
+    const linkUrl = `/invite?session_id=${linkId}`;
     
     // Async email
     sendInterviewEmail({
