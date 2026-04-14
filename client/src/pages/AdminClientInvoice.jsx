@@ -215,8 +215,8 @@ const AdminClientInvoice = () => {
   const generateFilledPdf = async () => {
     setIsGenerating(true);
     try {
-      // 1. Fetch the exact empty PDF provided
-      const response = await fetch('/Empty_invoice.pdf');
+      // 1. Fetch the exact empty PDF provided (new template)
+      const response = await fetch(`/New_Template.pdf?v=${new Date().getTime()}`);
       const existingPdfBytes = await response.arrayBuffer();
 
       // 2. Load the PDF into pdf-lib
@@ -267,6 +267,7 @@ const AdminClientInvoice = () => {
       // Note: Coordinates are estimated from standard layout and easily adjustable
 
       // -- Client details (Below 'To,') --
+      drawText("To,", 68, 140, 10, true);
       drawText(selectedClient?.companyName || "", 68, 155, 11, true);
 
       // Smart address formatting:
@@ -295,20 +296,36 @@ const AdminClientInvoice = () => {
         addressLines = lines;
       }
 
+      const invoiceDateStr = getOrdinalDate(form.invoiceDate);
+      let addressEndY = 170;
       if (selectedClient?.contactPerson) {
         drawText(selectedClient.contactPerson, 68, 170, 10, true);
         addressLines.forEach((line, i) => drawText(line, 68, 185 + i * 13, 10, true));
         const gstY = 185 + addressLines.length * 13;
-        if (selectedClient?.gstNumber) drawText(`GST : ${selectedClient.gstNumber}`, 68, gstY, 10, true);
+        if (selectedClient?.gstNumber) {
+          drawText(`GST : ${selectedClient.gstNumber}`, 68, gstY, 10, true);
+          addressEndY = gstY + 13;
+        } else {
+          addressEndY = gstY;
+        }
       } else {
         addressLines.forEach((line, i) => drawText(line, 68, 170 + i * 13, 10, true));
         const gstY = 170 + addressLines.length * 13;
-        if (selectedClient?.gstNumber) drawText(`GST : ${selectedClient.gstNumber}`, 68, gstY, 10, true);
+        if (selectedClient?.gstNumber) {
+          drawText(`GST : ${selectedClient.gstNumber}`, 68, gstY, 10, true);
+          addressEndY = gstY + 13;
+        } else {
+          addressEndY = gstY;
+        }
       }
 
-      // -- Erase background "Date:" from template: RIGHT SIDE ONLY (X=370+) --
-      // TAX INVOICE is centered (~X 220-365), Date: label is on right (~X 370-415)
-      // Y band: top 278-315 covers where Date: sits, above where TAX INVOICE header is
+      // Draw date below address (Request 1: positioned beneath the address section)
+      // Request 3: Change to normal font (isBold=false)
+      drawText(invoiceDateStr, 468, addressEndY + 15, 10, true);
+      const afterAddressY = addressEndY + 35;
+
+      // -- Commented out masking to allow Background Watermark to be visible --
+      /*
       firstPage.drawRectangle({
         x: 370,
         y: height - 315,
@@ -318,11 +335,6 @@ const AdminClientInvoice = () => {
         opacity: 1,
       });
 
-      // -- Date: Aligned with template --
-      drawText(getOrdinalDate(form.invoiceDate), 468, 118, 10, true);
-
-      // -- Deep Clean of Template Table Layer --
-      // Using a slightly wider and taller mask to catch all border artifacts
       firstPage.drawRectangle({
         x: 45,
         y: height - 760,
@@ -330,13 +342,14 @@ const AdminClientInvoice = () => {
         height: 500, 
         color: rgb(1, 1, 1),
       });
+      */
 
       // -- Redraw No: and SUB: after cleaning (Aligned with table at X=68) --
-      drawText(`No: ${form.invoiceNumber}`, 68, 280, 10, true);
-      drawText("SUB: Final Invoice", 68, 298, 10, true);
+      drawText(`No: ${form.invoiceNumber}`, 68, Math.max(280, afterAddressY), 10, true);
+      drawText("SUB: Final Invoice", 68, Math.max(298, afterAddressY + 18), 10, true);
 
       // -- TAX INVOICE Title --
-      drawTextCentered("TAX INVOICE", width / 2, 320, 200, true, 14);
+      drawTextCentered("TAX INVOICE", width / 2, Math.max(320, afterAddressY + 40), 200, true, 14);
 
       const cands = form.selectedCandidates.length > 0 ? form.selectedCandidates : (form.candidateName ? [{name: form.candidateName, role: form.role, joiningDate: form.joiningDate, actualSalary: form.actualSalary, percentage: form.percentage, payment: form.payment}] : []);
       
@@ -360,7 +373,7 @@ const AdminClientInvoice = () => {
       const drawCell = (text, x, w, y, h, align = 'center', isBold = false, fs = dataFs) => {
         firstPage.drawRectangle({
           x, y: height - (y + h/2), width: w, height: h,
-          borderColor: rgb(0,0,0), borderWidth: 0.7, color: rgb(1,1,1)
+          borderColor: rgb(0,0,0), borderWidth: 0.7
         });
         if (text) {
           if (align === 'center') drawTextCentered(text, x + w/2, y, w-4, isBold, fs);
@@ -382,7 +395,7 @@ const AdminClientInvoice = () => {
         const nameText = String(c.name || "");
         firstPage.drawRectangle({
           x: colStarts[1], y: height - (currentY + rowDR/2), width: colWidths[1], height: rowDR,
-          borderColor: rgb(0,0,0), borderWidth: 0.7, color: rgb(1,1,1)
+          borderColor: rgb(0,0,0), borderWidth: 0.7
         });
 
         if (nameText.length > 18) {
@@ -396,7 +409,7 @@ const AdminClientInvoice = () => {
         }
 
         drawCell(c.role || "", colStarts[2], colWidths[2], currentY, rowDR);
-        drawCell(c.joiningDate ? getOrdinalDate(c.joiningDate) : "", colStarts[3], colWidths[3], currentY, rowDR, 'center', true);
+        drawCell(c.joiningDate ? getOrdinalDate(c.joiningDate) : "", colStarts[3], colWidths[3], currentY, rowDR, 'center', false);
         drawCell(Number(c.actualSalary || 0).toLocaleString("en-IN"), colStarts[4], colWidths[4], currentY, rowDR);
         drawCell(`${c.percentage || 0}%`, colStarts[5], colWidths[5], currentY, rowDR);
         drawCell(Number(c.payment || 0).toLocaleString("en-IN"), colStarts[6], colWidths[6], currentY, rowDR);
@@ -413,11 +426,11 @@ const AdminClientInvoice = () => {
         const y = currentY + yOffset;
         firstPage.drawRectangle({
           x: colStarts[0], y: height - (y + tH/2), width: colStarts[6] - colStarts[0], height: tH,
-          borderColor: rgb(0,0,0), borderWidth: 0.7, color: rgb(1,1,1)
+          borderColor: rgb(0,0,0), borderWidth: 0.7
         });
         firstPage.drawRectangle({
           x: colStarts[6], y: height - (y + tH/2), width: colWidths[6], height: tH,
-          borderColor: rgb(0,0,0), borderWidth: 0.7, color: rgb(1,1,1)
+          borderColor: rgb(0,0,0), borderWidth: 0.7
         });
         const w = (isBold ? helveticaBold : helvetica).widthOfTextAtSize(label, 10);
         firstPage.drawText(label, { 
@@ -457,8 +470,8 @@ const AdminClientInvoice = () => {
         });
       }
 
-      // -- Signature Block (Left Aligned) --
-      const sigOffset = form.accountType !== "no" ? (accSpacing * 10) + 30 : 60;
+      // -- Signature Block (Left Aligned) -- (Request 2: Added more space for stamp/sig)
+      const sigOffset = form.accountType !== "no" ? (accSpacing * 10) + 80 : 110;
       const sigY = accY + sigOffset;
       drawText("Navya S", 68, sigY, 11, true);
       drawText("Vagarious Solutions Pvt Ltd", 68, sigY + 16, 11, true);
@@ -555,12 +568,14 @@ const AdminClientInvoice = () => {
   const downloadAsWord = async () => {
     setIsGenerating(true);
     try {
-      const response = await fetch('/Empty_invoice.pdf');
+      const response = await fetch(`/New_Template.pdf?v=${new Date().getTime()}`);
       const existingPdfBytes = await response.arrayBuffer();
       const tempPdfDoc = await PDFDocument.load(existingPdfBytes);
       const tempPage = tempPdfDoc.getPages()[0];
       const { height } = tempPage.getSize();
 
+      // -- Commented out masking to allow Background Watermark to be visible --
+      /*
       tempPage.drawRectangle({
         x: 370,
         y: height - 315,
@@ -582,6 +597,7 @@ const AdminClientInvoice = () => {
         height: 500,
         color: rgb(1, 1, 1)
       });
+      */
 
       const cleanPdfBytes = await tempPdfDoc.save();
       const pdfBlob = new Blob([cleanPdfBytes], { type: "application/pdf" });
@@ -723,7 +739,7 @@ const AdminClientInvoice = () => {
                 width: { size: ptToTwip(239), type: WidthType.DXA },
               }),
               new TableCell({
-                children: [makeParagraph(`Date: ${getOrdinalDate(form.invoiceDate)}`, { size: 10, bold: true, align: 'right', spaceAfter: 0 })],
+                children: [makeParagraph("", { size: 10, bold: true, align: 'right', spaceAfter: 0 })],
                 borders: noBorders,
                 width: { size: ptToTwip(239), type: WidthType.DXA },
               }),
@@ -738,6 +754,7 @@ const AdminClientInvoice = () => {
 
       children.push(headerTable);
       children.push(makeParagraph("", { size: 4, spaceAfter: 5 }));
+      children.push(makeParagraph("To,", { size: 10, bold: true, spaceAfter: 1 }));
       children.push(makeParagraph(selectedClient?.companyName || "", { size: 10, bold: true, spaceAfter: 1 }));
 
       if (selectedClient?.contactPerson) {
@@ -751,6 +768,10 @@ const AdminClientInvoice = () => {
       if (selectedClient?.gstNumber) {
         children.push(makeParagraph(`GST : ${selectedClient.gstNumber}`, { size: 9, bold: true, spaceAfter: 4 }));
       }
+
+      // Request 1: Date below address
+      // Request 3: Normal font (bold: false)
+      children.push(makeParagraph(`Date: ${getOrdinalDate(form.invoiceDate)}`, { size: 10, bold: true, align: 'right', spaceAfter: 20 }));
 
       children.push(new DocxParagraph({ children: [], spacing: { after: ptToTwip(15) } }));
       children.push(makeParagraph(`No: ${form.invoiceNumber}`, { size: 10, bold: true, spaceAfter: 2 }));
@@ -792,7 +813,7 @@ const AdminClientInvoice = () => {
           makeCell(String(idx + 1), 0, { fontSize: 8 }),
           makeCell(c.name || "", 1, { fontSize: 8, align: 'center' }),
           makeCell(c.role || "", 2, { fontSize: 8, align: 'center' }),
-          makeCell(c.joiningDate ? getOrdinalDate(c.joiningDate) : "", 3, { fontSize: 8, bold: true, align: 'center' }),
+          makeCell(c.joiningDate ? getOrdinalDate(c.joiningDate) : "", 3, { fontSize: 8, bold: false, align: 'center' }),
           makeCell(Number(c.actualSalary || 0).toLocaleString("en-IN"), 4, { fontSize: 8, align: 'center' }),
           makeCell(`${c.percentage || 0}%`, 5, { fontSize: 8, align: 'center' }),
           makeCell(Number(c.payment || 0).toLocaleString("en-IN"), 6, { fontSize: 8, align: 'center' }),
@@ -867,7 +888,8 @@ const AdminClientInvoice = () => {
         });
       }
 
-      children.push(new DocxParagraph({ children: [], spacing: { after: ptToTwip(30) } }));
+      // Request 2: More space for signature/stamp
+      children.push(new DocxParagraph({ children: [], spacing: { after: ptToTwip(60) } }));
       children.push(makeParagraph("Navya S", { size: 10, bold: true, spaceAfter: 1 }));
       children.push(makeParagraph("Vagarious Solutions Pvt Ltd", { size: 10, bold: true, spaceAfter: 0 }));
 
