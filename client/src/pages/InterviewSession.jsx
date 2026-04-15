@@ -8,12 +8,14 @@ export default function InterviewSession() {
 
   useEffect(() => {
     // Determine the backend base URL dynamically (removing /api if present)
-    const baseUrl = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/api$/, '').replace(/\/$/, '');
+    const apiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/api$/, '').replace(/\/$/, '');
     
+    // Now we load index.html from our own public folder (frontend origin)
+    // and pass the apiUrl so the interview knows where to send data.
     if (sessionId) {
-      setBackendUrl(`${baseUrl}/index.html?session_id=${sessionId}`);
+      setBackendUrl(`/forenten/index.html?session_id=${sessionId}&api_url=${encodeURIComponent(apiUrl)}`);
     } else {
-      setBackendUrl(`${baseUrl}/index.html`);
+      setBackendUrl(`/forenten/index.html?api_url=${encodeURIComponent(apiUrl)}`);
     }
   }, [sessionId]);
 

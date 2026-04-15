@@ -41,7 +41,7 @@ pnpm-lock.yaml
 *.docx
 *.log
 *.mjs
-backend/forenten/
+# backend/forenten/ (Removed to allow deployment)
 backend/check_db.js
 backend/cleanup_db.mjs
 backend/clearCandidates.js
