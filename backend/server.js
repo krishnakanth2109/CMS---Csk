@@ -45,11 +45,8 @@ const httpServer = createServer(app);
 // ─────────────────────────────────────────────────────────────────────────────
 const ALLOWED_ORIGINS = [
   'https://vagarious-cms.netlify.app',
-  'https://cms-vagarious.netlify.app',
   'http://localhost:5173',
   'http://localhost:5000',
-  'http://localhost:8080',
-  'http://127.0.0.1:8080',
 ];
 
 // ── Socket.IO ──────────────────────────────────────────────────────────────────
@@ -83,9 +80,10 @@ const connectDB = async () => {
     process.exit(1);
   }
 };
-connectDB();
+connectDB();   
 
-// Connect Agreement module DB (native MongoDB driver)
+// Connect Agreement module DB (nativ
+// e MongoDB driver)
 connectAgreementDB().catch(err => console.warn('Agreement DB not connected:', err.message));
 
 // ── Socket.IO events ───────────────────────────────────────────────────────────
@@ -173,7 +171,9 @@ app.use('/channels',   channelRoutes);
 app.get('/', (_req, res) => {
   res.json({ message: 'API is running with Socket.IO & File Uploads...' });
 });
-
+app.get('/ass', (_req, res) => {
+  res.json({ message: 'Mind your head' });
+});
 // ═══════════════════════════════════════════════════════════════════════════════
 // GET /api/reports  — Admin & Manager dashboard
 // FIX: status is stored as an ARRAY — use hasStatus() for all checks
