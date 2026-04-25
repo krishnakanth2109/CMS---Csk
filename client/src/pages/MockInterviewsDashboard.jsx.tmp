@@ -1,0 +1,557 @@
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import {
+  Brain, Send, Clock, PlayCircle, Plus, X, Search, ChevronRight,
+  User, CheckCircle, Video, CheckSquare, Briefcase, Mail, Cpu, Trash2, ExternalLink, Filter, ChevronDown, Copy, Users, RotateCw, CheckCircle2
+} from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/hooks/use-toast';
+import { useNavigate } from 'react-router-dom';
+
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+// Adjust for API format
+const API_URL = BASE_URL.endsWith('/api') ? BASE_URL : `${BASE_URL}/api`;
+
+function getFirebaseToken() {
+  try {
+    const raw = sessionStorage.getItem('currentUser');
+    return raw ? JSON.parse(raw)?.idToken : null;
+  } catch { return null; }
+}
+
+async function apiFetch(path, options = {}) {
+  const token = getFirebaseToken();
+  const res = await fetch(`${API_URL}/ai-mock${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      ...options.headers,
+    },
+  });
+  if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
+  return res.json();
+}
+
+export default function MockInterviewsDashboard() {
+  const { currentUser, userRole } = useAuth();
+  const { toast } = useToast();
+  const navigate = useNavigate();
+
+  const [activeTab, setActiveTab] = useState('overview');
+  const [sessions, setSessions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Form State
+  const [candidateName, setCandidateName] = useState('');
+  const [candidateEmail, setCandidateEmail] = useState('');
+  const [jobDescription, setJobDescription] = useState('');
+  const [duration, setDuration] = useState('30');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [allCandidates, setAllCandidates] = useState([]);
+  const [selectedCandidateId, setSelectedCandidateId] = useState('');
+  const [recruiters, setRecruiters] = useState([]);
+  const [selectedRecruiterId, setSelectedRecruiterId] = useState('all');
+
+  const adminId = userRole === 'admin' ? 'all' : (currentUser?._id || currentUser?.id || 'admin_user');
+
+  const fetchSessions = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await apiFetch(`/admin/sessions?admin_id=${adminId}`);
+      if (data.status === 'success') {
+        setSessions(data.sessions || []);
+      }
+    } catch (err) {
+      toast({ title: 'Error', description: 'Failed to sync sessions', variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  }, [adminId, toast]);
+
+  const fetchRecruiters = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_URL}/recruiters`, {
+        headers: { 'Authorization': `Bearer ${getFirebaseToken()}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setRecruiters(Array.isArray(data) ? data : (data.recruiters || []));
+      }
+    } catch (err) {
+      console.error('Failed to fetch recruiters', err);
+      setRecruiters([]);
+    }
+  }, []);
+
+  const fetchAllCandidates = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_URL}/candidates`, {
+        headers: { 'Authorization': `Bearer ${getFirebaseToken()}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAllCandidates(Array.isArray(data) ? data : (data.candidates || []));
+      }
+    } catch (err) {
+      console.error('Failed to fetch candidates', err);
+      setAllCandidates([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchSessions();
+    fetchAllCandidates();
+    fetchRecruiters();
+  }, [fetchSessions, fetchAllCandidates, fetchRecruiters]);
+
+  const handleSelectCandidate = (id) => {
+    setSelectedCandidateId(id);
+    const cand = allCandidates.find(c => (c._id || c.id) === id);
+    if (cand) {
+      setCandidateName(cand.name);
+      setCandidateEmail(cand.email);
+    } else {
+      setCandidateName('');
+      setCandidateEmail('');
+    }
+  };
+
+  const handleCreateSession = async (e) => {
+    e.preventDefault();
+    if (!candidateName || !candidateEmail || !jobDescription) {
+      toast({ title: 'Validation Error', description: 'Please provide candidate details and job description.', variant: 'destructive' });
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const data = await apiFetch('/admin/create-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          candidate_name: candidateName,
+          candidate_email: candidateEmail,
+          job_description: jobDescription,
+          admin_id: currentUser?._id || currentUser?.id || 'admin_user',
+          interview_duration: parseInt(duration)
+        })
+      });
+
+      if (data.status === 'success') {
+        toast({ title: 'Success', description: 'Interview link sent to ' + candidateEmail });
+        setCandidateName('');
+        setCandidateEmail('');
+        setJobDescription('');
+        setDuration('30');
+        setActiveTab('overview');
+        fetchSessions();
+      } else {
+        throw new Error(data.detail || 'Creation failed');
+      }
+    } catch (error) {
+      toast({ title: 'Failed', description: error.message, variant: 'destructive' });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const analytics = useMemo(() => {
+    const safeSessions = Array.isArray(sessions) ? sessions : [];
+    const total = safeSessions.length;
+    const selected = safeSessions.filter(s => s?.decision === 'Selected').length;
+    const rejected = safeSessions.filter(s => s?.decision === 'Rejected').length;
+    
+    return { total, selected, rejected };
+  }, [sessions]);
+
+  const filteredSessions = useMemo(() => {
+    const safeSessions = Array.isArray(sessions) ? sessions : [];
+    return safeSessions.filter(s => 
+      s?.candidate_name?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [sessions, searchQuery]);
+
+  return (
+    <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 relative">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h1 className="text-4xl font-black text-[#584ED3] tracking-tight">AI Interview Dashboard</h1>
+          <p className="text-gray-400 font-medium mt-1">Real-time candidate evaluation & session management.</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={fetchSessions}
+            className="bg-white border border-gray-200 text-slate-700 px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-sm hover:bg-slate-50 transition-all text-sm"
+          >
+            <RotateCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+          <button
+            onClick={() => setActiveTab('create')}
+            className="bg-[#4F46E5] hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-lg transition-all text-sm"
+          >
+            <Send className="w-4 h-4" />
+            New Dispatch
+          </button>
+        </div>
+      </div>
+
+      {/* Tabs / Pills Navigation */}
+      <div className="bg-white/50 p-1.5 rounded-2xl inline-flex items-center gap-2 border border-gray-100/50">
+        {[
+          { id: 'overview', label: 'Overview' },
+          { id: 'qualified', label: 'Qualified' },
+          { id: 'rejected_tab', label: 'Rejected' },
+          { id: 'create', label: 'Create New' }
+        ].map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`px-8 py-2.5 rounded-xl font-bold text-sm transition-all ${
+              activeTab === tab.id 
+                ? 'bg-indigo-100/60 text-indigo-600' 
+                : 'text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden relative">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50 rounded-full blur-3xl opacity-50 -mr-20 -mt-20 pointer-events-none" />
+        
+        {activeTab === 'overview' ? (
+          <div className="p-8 relative z-10">
+            {/* Header with Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
+              <div className="bg-white p-8 rounded-[2rem] border border-gray-50 shadow-sm flex items-center justify-between group hover:border-indigo-100 transition-all">
+                <div>
+                   <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-2">Total Sessions</p>
+                   <h3 className="text-5xl font-black text-slate-800 leading-none">{analytics.total}</h3>
+                </div>
+                <div className="p-4 bg-indigo-50 rounded-2xl group-hover:scale-110 transition-transform">
+                  <Users className="w-8 h-8 text-indigo-500" />
+                </div>
+              </div>
+
+              <div className="bg-white p-8 rounded-[2rem] border border-gray-50 shadow-sm flex items-center justify-between group hover:border-green-100 transition-all">
+                <div>
+                   <p className="text-[10px] font-black text-green-400 uppercase tracking-widest mb-2">Selected</p>
+                   <h3 className="text-5xl font-black text-slate-800 leading-none">{analytics.selected}</h3>
+                </div>
+                <div className="p-4 bg-green-50 rounded-2xl group-hover:scale-110 transition-transform">
+                  <CheckCircle2 className="w-8 h-8 text-green-500" />
+                </div>
+              </div>
+
+              <div className="bg-white p-8 rounded-[2rem] border border-gray-50 shadow-sm flex items-center justify-between group hover:border-rose-100 transition-all">
+                <div>
+                   <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest mb-2">Rejected</p>
+                   <h3 className="text-5xl font-black text-slate-800 leading-none">{analytics.rejected}</h3>
+                </div>
+                <div className="p-4 bg-rose-50 rounded-2xl group-hover:scale-110 transition-transform">
+                  <X className="w-8 h-8 text-rose-500" />
+                </div>
+              </div>
+
+              <div className="bg-white p-8 rounded-[2rem] border border-gray-50 shadow-sm flex flex-col justify-center gap-2 hover:border-indigo-50 transition-all">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ">Filter By Recruiter</p>
+                <div className="relative">
+                  <select 
+                    value={selectedRecruiterId} 
+                    onChange={(e) => setSelectedRecruiterId(e.target.value)}
+                    className="w-full bg-slate-50/50 border border-gray-100 py-3.5 px-5 rounded-2xl text-sm font-bold text-slate-700 focus:ring-0 outline-none cursor-pointer appearance-none"
+                  >
+                    <option value="all">All Recruiters</option>
+                    {(Array.isArray(recruiters) ? recruiters : []).map(r => (
+                      <option key={r._id || r.id} value={r._id || r.id}>{r.name || r.firstName}</option>
+                    ))}
+                  </select>
+                  <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none">
+                    <ChevronDown className="w-4 h-4 text-slate-300" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+
+            <div className="flex justify-between items-center mb-6 px-2">
+              <h2 className="text-xl font-bold text-slate-800 tracking-tight">Interview Pipeline</h2>
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Filter candidates..."
+                  className="pl-11 pr-5 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm w-64 transition-all"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="flex flex-col h-64 items-center justify-center gap-4">
+                <div className="w-12 h-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+                <p className="text-sm font-medium text-gray-400">Loading sessions...</p>
+              </div>
+            ) : filteredSessions.length === 0 ? (
+              <div className="flex flex-col h-64 items-center justify-center text-center">
+                <div className="p-6 bg-indigo-50 rounded-full mb-4">
+                  <Cpu className="w-12 h-12 text-indigo-300" />
+                </div>
+                <h3 className="text-lg font-bold text-slate-700">No mock interviews scheduled</h3>
+                <p className="text-gray-500 text-sm mt-1 max-w-sm">Create an AI mock interview session to automatically assess candidate skills.</p>
+                <button
+                  onClick={() => setActiveTab('create')}
+                  className="mt-6 font-bold text-indigo-600 hover:text-indigo-700 underline underline-offset-4"
+                >
+                  Create Your First Session
+                </button>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 border-b border-gray-100 text-slate-500 uppercase font-bold text-[10px] tracking-wider">
+                    <tr>
+                      <th className="px-6 py-8 text-left text-gray-400 font-bold text-[10px] uppercase tracking-widest bg-white">Candidate</th>
+                      <th className="px-6 py-8 text-left text-gray-400 font-bold text-[10px] uppercase tracking-widest bg-white">Recruiter</th>
+                      <th className="px-6 py-8 text-left text-gray-400 font-bold text-[10px] uppercase tracking-widest bg-white">Date Created</th>
+                      <th className="px-6 py-8 text-left text-gray-400 font-bold text-[10px] uppercase tracking-widest bg-white">Status</th>
+                      <th className="px-6 py-8 text-left text-gray-400 font-bold text-[10px] uppercase tracking-widest bg-white">Score</th>
+                      <th className="px-6 py-8 text-right text-gray-400 font-bold text-[10px] uppercase tracking-widest bg-white">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {filteredSessions.map((s) => {
+                      const safeRecs = Array.isArray(recruiters) ? recruiters : [];
+                      const rec = safeRecs.find(r => (r?._id || r?.id) === s?.created_by);
+                      
+                      let recName = 'System';
+                      if (rec) {
+                        if (rec.name) recName = rec.name;
+                        else if (rec.firstName) recName = `${rec.firstName} ${rec.lastName || ''}`.trim();
+                      } else if (s?.created_by === 'admin_user' || s?.created_by === 'all') {
+                        recName = 'Admin';
+                      }
+
+                      const recInitial = recName.charAt(0).toUpperCase();
+                      
+                      return (
+                        <tr key={s.link_id} className="hover:bg-slate-50/50 transition-all border-b border-gray-50">
+                          <td className="px-6 py-8">
+                            <div className="flex items-center gap-2">
+                              <p className="font-black text-[#584ED3] text-base uppercase whitespace-nowrap">{s.candidate_name}</p>
+                              {s.decision && s.decision !== 'pending' && (
+                                <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase text-white shadow-sm ${
+                                  s.decision === 'Selected' ? 'bg-[#10B981]' : 'bg-[#EF4444]'
+                                }`}>
+                                  {s.decision}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1.5 text-slate-400 mt-1">
+                               <Video className="w-3.5 h-3.5 text-blue-400" />
+                               <span className="text-xs font-semibold">{s.interview_duration || 30} min interview</span>
+                            </div>
+                            {s.decision && s.decision !== 'pending' ? (
+                              <p className={`text-[9px] font-black uppercase mt-2 opacity-90 ${s.decision === 'Selected' ? 'text-green-500' : 'text-rose-500'}`}>
+                                {s.decision.toUpperCase()} BY: {(() => {
+                                  const dbId = s.decision_by || s.created_by;
+                                  const dbRec = safeRecs.find(r => (r?._id || r?.id) === dbId);
+                                  return dbRec ? (dbRec.name || dbRec.firstName).toUpperCase() : 'SYSTEM';
+                                })()}
+                              </p>
+                            ) : (
+                              <p className="text-[9px] font-bold text-[#4F46E5] uppercase mt-2 opacity-80">
+                                ADDED BY: {recName.toUpperCase()}
+                              </p>
+                            )}
+                          </td>
+                          <td className="px-6 py-6">
+                             <div className="flex items-center gap-3">
+                               <div className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-500 text-xs font-black border border-indigo-100">
+                                 {recInitial}
+                               </div>
+                               <span className="font-black text-slate-700 text-sm tracking-tight">{recName}</span>
+                             </div>
+                          </td>
+                          <td className="px-6 py-6 font-bold text-slate-500 text-sm whitespace-nowrap">
+                            {new Date(s.created_at).toLocaleString('en-US', { 
+                              month: 'numeric', 
+                              day: 'numeric', 
+                              year: 'numeric', 
+                              hour: 'numeric', 
+                              minute: '2-digit', 
+                              hour12: true 
+                            })}
+                          </td>
+                          <td className="px-6 py-6">
+                            <span className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest ${
+                              s.status === 'completed' ? 'bg-green-500 text-white shadow-lg shadow-green-100' :
+                              'bg-indigo-100/50 text-indigo-400'
+                            }`}>
+                              {s.status === 'completed' ? 'COMPLETED' : 'PENDING'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-8 font-black text-base">
+                             {s.status === 'completed' ? (
+                               <span className={s.avg_score >= 70 ? 'text-green-500' : 'text-rose-500'}>
+                                 {Math.round(s.avg_score)}%
+                               </span>
+                             ) : (
+                               <span className="text-[#F43F5E]">N/A</span>
+                             )}
+                          </td>
+                          <td className="px-6 py-6 text-right">
+                            <div className="flex items-center justify-end gap-3">
+                              {s.status === 'completed' ? (
+                                <button
+                                  onClick={() => {
+                                    const baseUrl = API_URL.replace('/api', '');
+                                    window.open(`${baseUrl}/mock/admin.html#results?link_id=${s.link_id}`);
+                                  }}
+                                  className="bg-[#10B981] hover:bg-emerald-600 text-white px-5 py-2.5 font-bold text-sm rounded-xl transition-all shadow-lg shadow-green-100/50"
+                                >
+                                  View Results
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => {
+                                    const baseUrl = API_URL.replace('/api', '');
+                                    window.open(`${baseUrl}/mock/index.html?session_id=${s.link_id}`);
+                                  }}
+                                  className="bg-white border border-gray-100 text-slate-700 hover:bg-slate-50 px-5 py-2.5 font-black text-xs rounded-lg transition-all shadow-sm flex items-center gap-2 whitespace-nowrap"
+                                >
+                                  <Copy className="w-3 h-3" />
+                                  Invite
+                                </button>
+                              )}
+                              <button className="text-slate-300 hover:text-red-500 transition-colors p-2">
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="p-12 relative z-10 max-w-3xl mx-auto bg-white rounded-[2.5rem] my-8 shadow-sm border border-gray-50">
+            <div className="text-center mb-12">
+              <h2 className="text-3xl font-black text-slate-800 mb-2">Configure Session</h2>
+              <p className="text-gray-500 font-medium text-sm max-w-md mx-auto">Provide candidate details and context for the AI engine to generate dynamic questions.</p>
+            </div>
+              
+            <form onSubmit={handleCreateSession} className="space-y-6">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">Select Existing Candidate (Optional)</label>
+                  <select
+                    value={selectedCandidateId}
+                    onChange={(e) => handleSelectCandidate(e.target.value)}
+                    className="w-full px-4 py-3 bg-gray-50 focus:bg-white border border-gray-200 focus:border-indigo-500 rounded-xl text-sm font-medium transition-all appearance-none cursor-pointer"
+                  >
+                    <option value="">-- Select Candidate --</option>
+                    {allCandidates.map(c => (
+                      <option key={c._id || c.id} value={c._id || c.id}>{c.name} ({c.email})</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">Candidate Name <span className="text-red-500">*</span></label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <input required type="text" value={candidateName} onChange={e => setCandidateName(e.target.value)} className="w-full pl-10 pr-4 py-3 bg-gray-50 focus:bg-white border border-gray-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 rounded-xl text-sm font-medium transition-all" placeholder="John Doe" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">Candidate Email <span className="text-red-500">*</span></label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <input required type="email" value={candidateEmail} onChange={e => setCandidateEmail(e.target.value)} className="w-full pl-10 pr-4 py-3 bg-gray-50 focus:bg-white border border-gray-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 rounded-xl text-sm font-medium transition-all" placeholder="john@example.com" />
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">Duration (Minutes)</label>
+                  <div className="relative">
+                    <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <select value={duration} onChange={e => setDuration(e.target.value)} className="w-full pl-10 pr-4 py-3 bg-gray-50 focus:bg-white border border-gray-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 rounded-xl text-sm font-bold text-slate-700 transition-all appearance-none cursor-pointer">
+                      <option value="15">15 Minutes (Brief Assessment)</option>
+                      <option value="30">30 Minutes (Standard Interview)</option>
+                      <option value="45">45 Minutes (Deep Dive)</option>
+                      <option value="60">60 Minutes (Comprehensive)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2 flex justify-between">
+                    <span>Job Description <span className="text-red-500">*</span></span>
+                  </label>
+                  <div className="relative">
+                    <Briefcase className="absolute left-3 top-4 w-4 h-4 text-gray-400" />
+                    <textarea rows="4" value={jobDescription} onChange={e => setJobDescription(e.target.value)} className="w-full pl-10 pr-4 py-3 bg-gray-50 focus:bg-white border border-gray-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 rounded-xl text-sm font-medium transition-all resize-none" placeholder="Paste full job description requirements here..." />
+                  </div>
+                </div>
+
+                <div className="pt-4">
+                  <button type="submit" disabled={isSubmitting} className="w-full bg-[#283086] hover:bg-black text-white px-6 py-4 rounded-xl font-bold flex items-center justify-center gap-3 shadow-xl hover:shadow-2xl transition-all hover:-translate-y-1 disabled:opacity-70 disabled:hover:translate-y-0 disabled:hover:shadow-xl">
+                    {isSubmitting ? (
+                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <>
+                        <Send className="w-5 h-5" />
+                        <span>Dispatch Secure Interview Link</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <div className="hidden lg:block bg-slate-50 rounded-2xl p-8 border border-gray-100">
+              <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-6">
+                <CheckSquare className="w-5 h-5 text-indigo-500" />
+              </h3>
+              <ul className="space-y-6">
+                <li className="flex gap-4">
+                  <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-sm shrink-0">1</div>
+                  <div>
+                    <p className="text-xs text-gray-500 mt-1 leading-relaxed">The AI uses the provided Job Description and Resume to tailor custom interview questions targeting specific skills.</p>
+                  </div>
+                </li>
+                <li className="flex gap-4">
+                  <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-sm shrink-0">2</div>
+                  <div>
+                    <p className="text-xs text-gray-500 mt-1 leading-relaxed">Secure, single-use email links are sent to the candidate via Brevo, set to expire rigidly in 24 hours.</p>
+                  </div>
+                </li>
+                <li className="flex gap-4">
+                  <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-sm shrink-0">3</div>
+                  <div>
+                    <p className="text-xs text-gray-500 mt-1 leading-relaxed">While completing the video response, tab switches and audio irregularities are monitored for integrity scoring.</p>
+                  </div>
+                </li>
+                <li className="flex gap-4">
+                  <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-sm shrink-0">4</div>
+                  <div>
+                    <p className="text-xs text-gray-500 mt-1 leading-relaxed">Instantly access AI-graded answers, full transcripts, video recordings, and actionable recommendations right from this dashboard.</p>
+                  </div>
+                </li>
+              </ul>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

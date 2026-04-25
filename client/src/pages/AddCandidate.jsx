@@ -730,12 +730,9 @@ export default function AdminCandidates() {
           'First Name':        c.firstName || '',
           'Last Name':         c.lastName || '',
           'Full Name':         c.name || '',
+          'Recruiter':         recruiterName,
           'Email':             c.email || '',
           'Contact':           c.contact || '',
-          'Alternate Contact': c.alternateNumber || '',
-          'Position':          c.position || '',
-          'Client':            c.client || '',
-          'Recruiter':         recruiterName,
           'Status':            Array.isArray(c.status) ? c.status.join(' | ') : (c.status || ''),
           'Current Location':  c.currentLocation || '',
           'Preferred Location': c.preferredLocation || '',
@@ -974,13 +971,11 @@ export default function AdminCandidates() {
                         />
                       </th>
                       <th className="px-4 py-3 cursor-pointer whitespace-nowrap" onClick={() => handleSort('candidateId')}>ID <SortIcon field="candidateId" /></th>
-                      <th className="px-4 py-3 cursor-pointer whitespace-nowrap" onClick={() => handleSort('name')}>Name <SortIcon field="name" /></th>
-                      <th className="px-4 py-3 whitespace-nowrap">Phone</th>
-                      <th className="px-4 py-3 whitespace-nowrap">Email</th>
+                      <th className="px-4 py-3 cursor-pointer whitespace-nowrap" onClick={() => handleSort('name')}>Candidate Name <SortIcon field="name" /></th>
+                      <th className="px-4 py-3 whitespace-nowrap text-blue-600 font-bold">Recruiter</th>
                       <th className="px-4 py-3 whitespace-nowrap">Client</th>
                       <th className="px-4 py-3 whitespace-nowrap">Skills</th>
                       <th className="px-4 py-3 whitespace-nowrap">Date Added</th>
-                      <th className="px-4 py-3 whitespace-nowrap">Recruiter</th>
                       <th className="px-4 py-3 whitespace-nowrap">Experience</th>
                       <th className="px-4 py-3 whitespace-nowrap">CTC / ECTC</th>
                       <th className="px-4 py-3 whitespace-nowrap">Status</th>
@@ -1005,34 +1000,25 @@ export default function AdminCandidates() {
                           </td>
                           <td className="px-4 py-3 font-mono text-xs text-blue-600 font-bold cursor-pointer whitespace-nowrap" onClick={() => { navigator.clipboard.writeText(getCandidateId(c)); toast({ title: "Copied ID" }); }}>{getCandidateId(c)}</td>
                           <td className="px-4 py-3 font-semibold text-slate-900 whitespace-nowrap">{c.name}</td>
-                          <td className="px-4 py-3 text-slate-600 whitespace-nowrap">
-                            <div className="flex items-center gap-2">
-                              {c.contact || '-'}
-                              {c.contact && <MessageCircle className="h-3.5 w-3.5 text-green-500 cursor-pointer" onClick={() => handleWhatsApp(c)} />}
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 text-slate-500"><span className="truncate max-w-[150px] block" title={c.email}>{c.email || '-'}</span></td>
+                          <td className="px-4 py-3 text-[#283086] font-bold whitespace-nowrap italic">{typeof c.recruiterId === 'object' ? getRecruiterName(c.recruiterId) : c.recruiterName || '-'}</td>
                           <td className="px-4 py-3 text-slate-600 font-medium whitespace-nowrap">{c.client || '-'}</td>
                           <td className="px-4 py-3 text-xs text-slate-500 max-w-[150px] truncate" title={Array.isArray(c.skills) ? c.skills.join(', ') : c.skills}>
                             {!c.skills ? 'N/A' : Array.isArray(c.skills) ? c.skills.slice(0, 3).join(', ') + (c.skills.length > 3 ? '...' : '') : c.skills.length > 50 ? c.skills.substring(0, 50) + '...' : c.skills}
                           </td>
-                          <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{c.dateAdded ? new Date(c.dateAdded).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : (c.createdAt ? new Date(c.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-')}</td>
-                          <td className="px-4 py-3 text-sm font-medium text-slate-700 whitespace-nowrap">
-                             {typeof c.recruiterId === 'object' ? getRecruiterName(c.recruiterId) : c.recruiterName || '-'}
-                          </td>
+                          <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{c.dateAdded ? new Date(c.dateAdded).toLocaleDateString('en-GB') : (c.createdAt ? new Date(c.createdAt).toLocaleDateString('en-GB') : '-')}</td>
                           <td className="px-4 py-3 text-sm whitespace-nowrap">{c.totalExperience ? `${c.totalExperience} Yrs` : '-'}</td>
                           <td className="px-4 py-3 text-xs whitespace-nowrap"><div>{c.ctc || '-'}</div><div className="text-green-600">{c.ectc || '-'}</div></td>
                           <td className="px-4 py-3">
                             <div className="flex flex-wrap gap-1 min-w-[120px]">
                               {statusArr.map((s) => (
-                                <span key={s} className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-100 text-blue-800 mr-1 whitespace-nowrap">{s}</span>
+                                <span key={s} className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 text-blue-800 mr-1 whitespace-nowrap">{s}</span>
                               ))}
                             </div>
                           </td>
                           <td className="px-4 py-3 text-xs text-slate-500 truncate max-w-[100px]">{c.remarks || '-'}</td>
                           <td className="px-4 py-3 text-right whitespace-nowrap">
                             <div className="flex justify-end items-center gap-2">
-                              <Eye className="h-4 w-4 text-blue-600 cursor-pointer" onClick={() => setViewCandidate(c) || setIsViewDialogOpen(true)} />
+                              <Eye className="h-4 w-4 text-blue-600 cursor-pointer" onClick={() => { setViewCandidate(c); setIsViewDialogOpen(true); }} />
                               <Edit className="h-4 w-4 text-slate-600 cursor-pointer" onClick={() => openEditDialog(c)} />
                               <Trash2 className="h-4 w-4 text-red-500 cursor-pointer" onClick={() => handleDelete(c._id)} />
                             </div>

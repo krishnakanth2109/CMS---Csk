@@ -418,6 +418,15 @@ export default function RecruiterAssignments() {
                 <option value="Hybrid">Hybrid</option>
               </NativeSelect>
             </div>
+            {/* ✅ ADDED GENDER FIELD HERE */}
+            <div>
+              <Label>Gender Preference</Label>
+              <NativeSelect value={jobForm.gender} onChange={val => setJobForm({...jobForm, gender: val})} disabled={isEditMode}>
+                <option value="Any">Any</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+              </NativeSelect>
+            </div>
 
             <div className="col-span-1 md:col-span-2 mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
               <h4 className="text-sm font-semibold mb-3 flex items-center gap-2 text-zinc-900 dark:text-white"><UserGroupIcon className="w-4 h-4"/> Assign Recruiters</h4>
@@ -467,6 +476,7 @@ export default function RecruiterAssignments() {
       </Modal>
 
       {/* Delete Confirm Modal */}
+      {/* (Space reserved if you add delete functionality back in the future) */}
 
     </>
   );

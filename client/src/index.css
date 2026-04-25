@@ -86,3 +86,9 @@
 .glass {
   @apply bg-white/70 dark:bg-[#050505]/70 backdrop-blur-xl border border-gray-200 dark:border-white/10;
 }
+@media print {
+  body * { visibility: hidden; }
+  #printable-results, #printable-results * { visibility: visible; }
+  #printable-results { position: absolute; left: 0; top: 0; width: 100%; padding: 0; border: none; box-shadow: none; margin: 0; }
+  .no-print, .no-print * { display: none !important; }
+}

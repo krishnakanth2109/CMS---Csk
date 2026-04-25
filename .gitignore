@@ -34,4 +34,26 @@ Thumbs.db
 package-lock.json
 yarn.lock
 pnpm-lock.yaml
+
+# Irrelevant Files & Media
+*.xlsx
+*.webm
+*.docx
+*.log
+*.mjs
+# backend/forenten/ (Removed to allow deployment)
+backend/check_db.js
+backend/cleanup_db.mjs
+backend/clearCandidates.js
+backend/convert.js
+backend/convertToRoutes.js
+backend/diagnostic.js
+backend/managerseed.js
+backend/seeder.js
+backend/seed.js
+backend/crashlog.txt
+backend/error*.log
+client/build-error.log
+app.js
+check_db.js
 .env

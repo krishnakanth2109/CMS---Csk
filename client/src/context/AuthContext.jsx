@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useCallback } from 'react';
 
 const AuthContext = createContext(null);
 
-const API_URL     = import.meta.env.VITE_API_URL;
+const API_URL     = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 const FB_API_KEY  = import.meta.env.VITE_FIREBASE_API_KEY;
 const SESSION_KEY = 'currentUser';
 

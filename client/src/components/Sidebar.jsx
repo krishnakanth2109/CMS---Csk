@@ -31,6 +31,9 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
     { name: 'Schedules',          path: '/admin/schedules',         icon: Calendar },
     { name: 'Messages',           path: '/admin/messages',          icon: MessageSquare },
     { name: 'Agreements',          path: '/admin/agreements',        icon: Handshake },
+    { name: 'Mock Interviews',    path: '/admin/mock',              icon: Video },
+    { name: 'Offer Letters',      isExternal: true, url: 'https://automated-offer-letter-generator-mocha.vercel.app/?jr_id=l_4387424181',     icon: FileText }, 
+
     { name: 'Reports',            path: '/admin/reports',           icon: BarChart3 },
     { name: 'Settings',           path: '/admin/settings',          icon: Settings }, 
   ];
@@ -42,6 +45,7 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
     { name: 'Assignments',  path: '/recruiter/assignments',icon: Briefcase },
     { name: 'Schedules',    path: '/recruiter/schedules',  icon: Calendar },
     { name: 'Messages',     path: '/recruiter/messages',   icon: MessageSquare },
+    { name: 'Mock Interviews', path: '/recruiter/mock',     icon: Video },
     { name: 'Reports',      path: '/recruiter/reports',    icon: BarChart3 },
     { name: 'My Profile',   path: '/recruiter/profile',    icon: User },
     { name: 'Settings',     path: '/recruiter/settings',   icon: Settings },
@@ -59,6 +63,10 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
       { name: 'Requirements',       path: '/admin/requirements',  icon: ClipboardList },
       { name: 'Schedules',          path: '/admin/schedules',     icon: Calendar },
       { name: 'Messages',           path: '/admin/messages',      icon: MessageSquare },
+      { name: 'Agreements',       path: '/admin/agreements',    icon: Handshake },
+      { name: 'Mock Interviews',    path: '/admin/mock',          icon: Video },
+      // { name: 'Offer Letters',      isExternal: true, url: 'https://automated-offer-letter-generator-mocha.vercel.app/?jr_id=l_4387424181',     icon: FileText }, 
+
       { name: 'Reports',            path: '/admin/reports',       icon: BarChart3 },
       { name: 'Settings',           path: '/admin/settings',      icon: Settings },
     ];

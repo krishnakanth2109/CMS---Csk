@@ -1,4 +1,3 @@
-// --- START OF FILE Job.js ---
 import mongoose from 'mongoose';
 
 const jobSchema = mongoose.Schema({
@@ -13,30 +12,21 @@ const jobSchema = mongoose.Schema({
   monthlySalary: { type: String, default: '' }, 
   gender: { type: String, enum: ['Any', 'Male', 'Female'], default: 'Any' },
   noticePeriod: { type: String, default: '' },
-  tatTime: { type: Date }, // Date of Expiry (TAT)
+  tatTime: { type: Date }, 
   primaryRecruiter: { type: String, default: '' },
   secondaryRecruiter: { type: String, default: '' },
   skills: { type: String, default: '' },
   jdLink: { type: String, default: '' },
-
-  // Legacy fields kept for backward database compatibility
-  interviewMode: { type: String, default: 'Virtual' },
-  languages: { type: String, default: '' },
-  comments: { type: String, default: '' },
-
   active: { type: Boolean, default: true },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }
 }, {
   timestamps: true
 });
 
-// Indexes for faster searches
+// Indexes
 jobSchema.index({ jobCode: 1 });
 jobSchema.index({ clientName: 1 });
 jobSchema.index({ position: 1 });
-jobSchema.index({ primaryRecruiter: 1 });
-jobSchema.index({ secondaryRecruiter: 1 });
-jobSchema.index({ createdBy: 1 });
 
 const Job = mongoose.model('Job', jobSchema);
 export default Job;

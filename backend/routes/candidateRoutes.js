@@ -144,6 +144,10 @@ router.get('/', async (req, res) => {
       .populate('recruiterId', 'name firstName lastName email')
       .sort({ createdAt: -1 })
       .lean(); // FIX 2: plain objects — faster serialisation on large lists
+    console.log(`[getCandidates] Found ${candidates.length} candidates for query:`, query);
+    if (candidates.length > 0) {
+      console.log(`- Sample: ${candidates[0].firstName} ${candidates[0].lastName} recId: ${candidates[0].recruiterId}`);
+    }
 
     res.json(candidates);
   } catch (error) {

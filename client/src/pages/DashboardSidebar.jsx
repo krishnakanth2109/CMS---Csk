@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Users, Briefcase, Calendar, MessageSquare,
   BarChart2, Settings, LogOut, ChevronLeft, ChevronRight,
   User, ClipboardList, Building2, FileText, UserCheck,
-  Menu, X
+  Menu, X, BrainCircuit
 } from 'lucide-react';
 
 const adminLinks = [
@@ -16,6 +16,7 @@ const adminLinks = [
   { to: '/admin/invoices', label: 'Invoices', icon: FileText },
   { to: '/admin/requirements', label: 'Requirements', icon: ClipboardList },
   { to: '/admin/messages', label: 'Messages', icon: MessageSquare },
+  { to: '/admin/mock', label: 'AI Mock', icon: BrainCircuit },
   { to: '/admin/reports', label: 'Reports', icon: BarChart2 },
   { to: '/admin/settings', label: 'Settings', icon: Settings },
 ];
@@ -26,6 +27,7 @@ const recruiterLinks = [
   { to: '/recruiter/assignments', label: 'Assignments', icon: Briefcase },
   { to: '/recruiter/schedules', label: 'Schedules', icon: Calendar },
   { to: '/recruiter/messages', label: 'Messages', icon: MessageSquare },
+  { to: '/recruiter/mock', label: 'AI Mock', icon: BrainCircuit },
   { to: '/recruiter/reports', label: 'Reports', icon: BarChart2 },
   { to: '/recruiter/profile', label: 'Profile', icon: User },
   { to: '/recruiter/settings', label: 'Settings', icon: Settings },

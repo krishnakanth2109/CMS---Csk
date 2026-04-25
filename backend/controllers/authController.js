@@ -1,5 +1,6 @@
 import User from '../models/User.js';
 import { admin } from '../middleware/authMiddleware.js';
+import { sendBrevoEmail } from '../services/email.js';
 
 // Helper: derive a display "name" from User document.
 const fullName = (user) =>
@@ -142,9 +143,34 @@ export const forgotPassword = async (req, res) => {
     const user = await User.findOne({ email });
     if (!user) return res.json({ message: 'Reset link sent if registered.' });
     const resetLink = await admin.auth().generatePasswordResetLink(email);
-    console.log(`Reset link: ${resetLink}`);
+    
+    await sendBrevoEmail({
+      toEmail: email,
+      toName: [user.firstName, user.lastName].filter(Boolean).join(' ') || user.username || "User",
+      subject: "Password Reset Request - Arah Info Tech",
+      htmlContent: `
+        <html>
+        <body>
+          <h3>Password Reset Request</h3>
+          <p>Hello,</p>
+          <p>We received a request to reset your password for your Arah Info Tech account. You can do this by clicking the link below:</p>
+          <div style="margin: 20px 0;">
+            <a href="${resetLink}" style="background-color: #6366f1; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">
+              Reset Password
+            </a>
+          </div>
+          <p>If you did not request this, please ignore this email.</p>
+          <p>Best Regards,<br/><b>Arah Team</b></p>
+        </body>
+        </html>
+      `
+    });
+
     res.json({ message: 'Reset link sent if registered.' });
-  } catch (error) { res.status(500).json({ message: 'Error' }); }
+  } catch (error) { 
+    console.error('Forgot Password Error:', error);
+    res.status(500).json({ message: 'Error' }); 
+  }
 };
 
 // @desc    Delete user profile (Danger Zone)

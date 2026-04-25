@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 
 const interviewSchema = mongoose.Schema({
-  interviewId: { type: String, unique: true }, // e.g., INT-1699999999
+  interviewId: { type: String, unique: true, sparse: true }, // e.g., INT-1699999999
   candidateId: { type: mongoose.Schema.Types.ObjectId, ref: 'Candidate', required: true },
   recruiterId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   jobId: { type: mongoose.Schema.Types.ObjectId, ref: 'Job' }, 

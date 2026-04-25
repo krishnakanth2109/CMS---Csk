@@ -168,7 +168,7 @@ export const generatePdfWithTemplate = async (htmlContent, templateUrl = '/Arah_
             let content = li.innerHTML;
             if (content.trim().startsWith('*')) { content = content.replace('*', '').trim(); }
             let align = li.style.textAlign || 'justify';
-            
+
             const table = document.createElement('table');
             table.style.width = '100%';
             table.style.border = 'none';

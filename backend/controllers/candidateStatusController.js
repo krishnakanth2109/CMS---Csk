@@ -1,4 +1,5 @@
 import Candidate from '../models/Candidate.js';
+import { sendDecisionEmail } from '../services/email.js';
 
 // @desc    Update candidate status with interview level and outcome
 // @route   PUT /api/candidates/:id/status
@@ -50,6 +51,21 @@ export const updateCandidateStatus = async (req, res) => {
       message: 'Candidate status updated successfully',
       candidate: updatedCandidate
     });
+
+    // Send email on key decisions
+    if (newStatus === 'Selected' || newStatus === 'Rejected') {
+      try {
+        const fullName = [updatedCandidate.firstName, updatedCandidate.lastName].filter(Boolean).join(' ') || updatedCandidate.name;
+        await sendDecisionEmail({
+          email: updatedCandidate.email,
+          name: fullName,
+          decision: newStatus
+        });
+        console.log(`[Email] Automated decision email sent for status: ${newStatus}`);
+      } catch (err) {
+        console.error('[Email] Failed to send automated decision email:', err.message);
+      }
+    }
   } catch (error) {
     console.error('Status update error:', error);
     res.status(400).json({ message: error.message });
@@ -137,6 +153,22 @@ export const inlineUpdateCandidate = async (req, res) => {
       message: 'Candidate updated successfully',
       candidate: updatedCandidate
     });
+
+    // Send email on key decisions
+    const finalStatus = updateData.status;
+    if (finalStatus === 'Selected' || finalStatus === 'Rejected') {
+      try {
+        const fullName = [updatedCandidate.firstName, updatedCandidate.lastName].filter(Boolean).join(' ') || updatedCandidate.name;
+        await sendDecisionEmail({
+          email: updatedCandidate.email,
+          name: fullName,
+          decision: finalStatus
+        });
+        console.log(`[Email] Automated decision email sent via inline-update for: ${finalStatus}`);
+      } catch (err) {
+        console.error('[Email] Failed to send automated decision email:', err.message);
+      }
+    }
   } catch (error) {
     console.error('Inline update error:', error);
     res.status(400).json({ message: error.message });

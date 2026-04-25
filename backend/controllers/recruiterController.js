@@ -1,6 +1,7 @@
 import User from '../models/User.js';
 import { admin } from '../middleware/authMiddleware.js';
 import { v2 as cloudinary } from 'cloudinary';
+import { sendBrevoEmail } from '../services/email.js';
 
 cloudinary.config({
   cloud_name: process.env.CLOUD_NAME,
@@ -179,8 +180,12 @@ export const getRecruiters = async (req, res) => {
     // Filtering by active:true here meant deactivated users were never returned,
     // so the Inactive counter always showed 0 and deactivated cards disappeared.
     const recruiters = await User.find({
-      role: { $in: ['recruiter', 'admin'] }
+      role: { $in: ['recruiter', 'admin', 'manager'] }
     }).select('-password').sort({ role: 1, firstName: 1 }).lean();
+    console.log(`[getRecruiters] Found ${recruiters.length} users with roles recruiter/admin/manager`);
+    if (recruiters.length > 0) {
+      console.log(`- Sample: ${recruiters[0].firstName} ${recruiters[0].lastName} role: ${recruiters[0].role}`);
+    }
     res.json(recruiters);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -247,6 +252,36 @@ export const createRecruiter = async (req, res) => {
       recruiterId: user.recruiterId,
       role:        user.role,
       firebaseUid: user.firebaseUid,
+    });
+
+    const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:5174').replace(/\/$/, '');
+
+    // Send Welcome Email to Recruiter - BACKGROUNDED
+    sendBrevoEmail({
+      toEmail: email,
+      toName: `${firstName} ${lastName}`,
+      subject: "Welcome to VTS Tracker - Recruiter Account",
+      htmlContent: `
+        <html>
+        <body style="font-family: sans-serif; line-height: 1.6; color: #333;">
+          <h2 style="color: #6366f1;">Welcome ${firstName}!</h2>
+          <p>Your recruiter account has been created successfully in the <b>VTS Tracker</b> portal.</p>
+          <p><b>Your Credentials:</b></p>
+          <ul>
+            <li><b>Email:</b> ${email}</li>
+            <li><b>Password:</b> ${password}</li>
+          </ul>
+          <p>You can login here: <a href="${frontendUrl}/login">VTS Login</a></p>
+          <p>Please change your password after your first login for security.</p>
+          <p>Best Regards,<br/><b>Admin Team - Arah Info Tech</b></p>
+        </body>
+        </html>
+      `
+    }).then(sent => {
+      if (sent) console.log(`[Email] Welcome email sent asynchronously to: ${email}`);
+      else console.error(`[Email] Async welcome email delivery FAILED for: ${email}`);
+    }).catch(err => {
+      console.error(`[Email Error] Async welcome email for ${email}:`, err.message);
     });
   } catch (error) {
     console.error('Create Recruiter Error:', error);

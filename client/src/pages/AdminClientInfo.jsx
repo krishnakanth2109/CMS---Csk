@@ -22,73 +22,73 @@ const ClientDetailCard = ({ client, onClose }) => {
         className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto border border-zinc-200 dark:border-zinc-800"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Grey Gradient Header */}
-        <div className="bg-gradient-to-r from-zinc-800 to-zinc-950 text-white p-6 rounded-t-2xl border-b border-zinc-700">
-          <div className="flex justify-between items-start">
-            <div>
-              <h2 className="text-2xl font-bold tracking-tight">{client.companyName}</h2>
-              <div className="flex items-center gap-3 mt-2 text-zinc-300 text-sm">
-                <span className="bg-zinc-800 px-2 py-1 rounded-md border border-zinc-700 text-xs font-mono">
-                  {client.clientId}
-                </span>
-                {client.industry && <span>• {client.industry}</span>}
-                {client.clientLocation && <span>• {client.clientLocation}</span>}
-              </div>
-            </div>
-            <button
-              onClick={onClose}
-              className="p-1.5 hover:bg-zinc-700 rounded-lg text-zinc-400 hover:text-white"
-            >
-              <X className="w-6 h-6" />
-            </button>
-          </div>
-        </div>
-
-        <div className="p-6 space-y-6 text-zinc-800 dark:text-zinc-300">
-          <div className="grid md:grid-cols-2 gap-8">
-            {/* Contact Info Card */}
-            <div className="bg-zinc-50 dark:bg-zinc-800/50 p-5 rounded-xl border border-zinc-100 dark:border-zinc-800">
-              <h3 className="font-semibold text-lg mb-4 flex items-center gap-2 text-zinc-900 dark:text-zinc-100 border-b border-zinc-200 dark:border-zinc-700 pb-2">
-                <User className="w-5 h-5 text-zinc-500" /> Contact Details
-              </h3>
-              <div className="space-y-3 text-sm">
-                <p className="flex justify-between"><span className="text-zinc-500">Contact Person:</span> <span className="font-medium">{client.contactPerson || "-"}</span></p>
-                <p className="flex justify-between"><span className="text-zinc-500">Email:</span> <span className="font-medium">{client.email || "-"}</span></p>
-                <p className="flex justify-between"><span className="text-zinc-500">Phone:</span> <span className="font-medium">{client.phone || "-"}</span></p>
-                <p className="flex justify-between"><span className="text-zinc-500">Website:</span> <span className="font-medium">{client.website || "-"}</span></p>
-                <p className="flex justify-between"><span className="text-zinc-500">Location:</span> <span className="font-medium">{client.clientLocation || "-"}</span></p>
-                <div className="pt-2"><span className="text-zinc-500 block mb-1">Address:</span> <p className="font-medium text-xs leading-relaxed">{client.address || "-"}</p></div>
-              </div>
-            </div>
-
-            {/* Business Terms Card */}
-            <div className="bg-zinc-50 dark:bg-zinc-800/50 p-5 rounded-xl border border-zinc-100 dark:border-zinc-800">
-              <h3 className="font-semibold text-lg mb-4 flex items-center gap-2 text-zinc-900 dark:text-zinc-100 border-b border-zinc-200 dark:border-zinc-700 pb-2">
-                <Building2 className="w-5 h-5 text-zinc-500" /> Business Terms
-              </h3>
-              <div className="space-y-3 text-sm">
-                <p className="flex justify-between"><span className="text-zinc-500">Commission Rate:</span> <span className="font-medium">{client.percentage ? `${client.percentage}%` : "-"}</span></p>
-                <p className="flex justify-between"><span className="text-zinc-500">Candidate Period:</span> <span className="font-medium">{client.candidatePeriod ? `${client.candidatePeriod} months` : "-"}</span></p>
-                <p className="flex justify-between"><span className="text-zinc-500">Replacement:</span> <span className="font-medium">{client.replacementPeriod ? `${client.replacementPeriod} days` : "-"}</span></p>
-                <p className="flex justify-between"><span className="text-zinc-500">Locking Period:</span> <span className="font-medium">{client.lockingPeriod || "-"}</span></p>
-                <p className="flex justify-between"><span className="text-zinc-500">Payment Mode:</span> <span className="font-medium">{client.paymentMode || "-"}</span></p>
-                <p className="flex justify-between"><span className="text-zinc-500">GST Number:</span> <span className="font-medium font-mono text-xs">{client.gstNumber || "-"}</span></p>
-                <p className="flex justify-between"><span className="text-zinc-500">Status:</span>
-                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${client.active ? 'bg-zinc-200 text-zinc-800 dark:bg-zinc-700 dark:text-zinc-200' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
-                    {client.active ? "Active" : "Inactive"}
+          {/* Grey Gradient Header */}
+          <div className="bg-gradient-to-r from-zinc-800 to-zinc-950 text-white p-6 rounded-t-2xl border-b border-zinc-700">
+            <div className="flex justify-between items-start">
+              <div>
+                <h2 className="text-2xl font-bold tracking-tight">{client.companyName}</h2>
+                <div className="flex items-center gap-3 mt-2 text-zinc-300 text-sm">
+                  <span className="bg-zinc-800 px-2 py-1 rounded-md border border-zinc-700 text-xs font-mono">
+                    {client.clientId}
                   </span>
-                </p>
+                  {client.industry && <span>• {client.industry}</span>}
+                  {client.clientLocation && <span>• {client.clientLocation}</span>}
+                </div>
               </div>
+              <button
+                onClick={onClose}
+                className="p-1.5 hover:bg-zinc-700 rounded-lg text-zinc-400 hover:text-white"
+              >
+                <X className="w-6 h-6" />
+              </button>
             </div>
           </div>
 
-          {client.terms && (
-            <div className="bg-zinc-100 dark:bg-zinc-800 p-5 rounded-xl border border-zinc-200 dark:border-zinc-700">
-              <h4 className="font-semibold mb-2 text-zinc-900 dark:text-zinc-100">Terms & Conditions</h4>
-              <p className="text-sm text-zinc-600 dark:text-zinc-400 whitespace-pre-wrap leading-relaxed">{client.terms}</p>
+          <div className="p-6 space-y-6 text-zinc-800 dark:text-zinc-300">
+            <div className="grid md:grid-cols-2 gap-8">
+              {/* Contact Info Card */}
+              <div className="bg-zinc-50 dark:bg-zinc-800/50 p-5 rounded-xl border border-zinc-100 dark:border-zinc-800">
+                <h3 className="font-semibold text-lg mb-4 flex items-center gap-2 text-zinc-900 dark:text-zinc-100 border-b border-zinc-200 dark:border-zinc-700 pb-2">
+                  <User className="w-5 h-5 text-zinc-500" /> Contact Details
+                </h3>
+                <div className="space-y-3 text-sm">
+                  <p className="flex justify-between"><span className="text-zinc-500">Contact Person:</span> <span className="font-medium">{client.contactPerson || "-"}</span></p>
+                  <p className="flex justify-between"><span className="text-zinc-500">Email:</span> <span className="font-medium">{client.email || "-"}</span></p>
+                  <p className="flex justify-between"><span className="text-zinc-500">Phone:</span> <span className="font-medium">{client.phone || "-"}</span></p>
+                  <p className="flex justify-between"><span className="text-zinc-500">Website:</span> <span className="font-medium">{client.website || "-"}</span></p>
+                  <p className="flex justify-between"><span className="text-zinc-500">Location:</span> <span className="font-medium">{client.clientLocation || "-"}</span></p>
+                  <div className="pt-2"><span className="text-zinc-500 block mb-1">Address:</span> <p className="font-medium text-xs leading-relaxed">{client.address || "-"}</p></div>
+                </div>
+              </div>
+
+              {/* Business Terms Card */}
+              <div className="bg-zinc-50 dark:bg-zinc-800/50 p-5 rounded-xl border border-zinc-100 dark:border-zinc-800">
+                <h3 className="font-semibold text-lg mb-4 flex items-center gap-2 text-zinc-900 dark:text-zinc-100 border-b border-zinc-200 dark:border-zinc-700 pb-2">
+                  <Building2 className="w-5 h-5 text-zinc-500" /> Business Terms
+                </h3>
+                <div className="space-y-3 text-sm">
+                  <p className="flex justify-between"><span className="text-zinc-500">Commission Rate:</span> <span className="font-medium">{client.percentage ? `${client.percentage}%` : "-"}</span></p>
+                  <p className="flex justify-between"><span className="text-zinc-500">Candidate Period:</span> <span className="font-medium">{client.candidatePeriod ? `${client.candidatePeriod} months` : "-"}</span></p>
+                  <p className="flex justify-between"><span className="text-zinc-500">Replacement:</span> <span className="font-medium">{client.replacementPeriod ? `${client.replacementPeriod} days` : "-"}</span></p>
+                  <p className="flex justify-between"><span className="text-zinc-500">Locking Period:</span> <span className="font-medium">{client.lockingPeriod || "-"}</span></p>
+                  <p className="flex justify-between"><span className="text-zinc-500">Payment Mode:</span> <span className="font-medium">{client.paymentMode || "-"}</span></p>
+                  <p className="flex justify-between"><span className="text-zinc-500">GST Number:</span> <span className="font-medium font-mono text-xs">{client.gstNumber || "-"}</span></p>
+                  <p className="flex justify-between"><span className="text-zinc-500">Status:</span>
+                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${client.active ? 'bg-zinc-200 text-zinc-800 dark:bg-zinc-700 dark:text-zinc-200' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
+                      {client.active ? "Active" : "Inactive"}
+                    </span>
+                  </p>
+                </div>
+              </div>
             </div>
-          )}
-        </div>
+
+            {client.terms && (
+              <div className="bg-zinc-100 dark:bg-zinc-800 p-5 rounded-xl border border-zinc-200 dark:border-zinc-700">
+                <h4 className="font-semibold mb-2 text-zinc-900 dark:text-zinc-100">Terms & Conditions</h4>
+                <p className="text-sm text-zinc-600 dark:text-zinc-400 whitespace-pre-wrap leading-relaxed">{client.terms}</p>
+              </div>
+            )}
+          </div>
       </div>
     </div>
   );
@@ -365,7 +365,7 @@ export default function AdminClientInfo() {
               <input name="industry" value={form.industry} onChange={handleChange} className={`${inputCls} ${errors.industry ? 'border-red-500' : ''}`} />
               {errors.industry && <p className="text-xs text-red-500 mt-1">{errors.industry}</p>}
             </div>
-
+            
             {/* --- ADDED NEW FIELDS HERE --- */}
             <div>
               <label className="block text-xs font-medium text-zinc-500 mb-1">Client Location</label>
@@ -390,7 +390,7 @@ export default function AdminClientInfo() {
               <input name="paymentMode" value={form.paymentMode} onChange={handleChange} placeholder="e.g. Net-30" className={`${inputCls} ${errors.paymentMode ? 'border-red-500' : ''}`} />
               {errors.paymentMode && <p className="text-xs text-red-500 mt-1">{errors.paymentMode}</p>}
             </div>
-            {/* ----------------------------- */}
+             {/* ----------------------------- */}
 
             <div>
               <label className="block text-xs font-medium text-zinc-500 mb-1">Commission %</label>
@@ -461,7 +461,7 @@ export default function AdminClientInfo() {
                       <div className="text-zinc-800 dark:text-zinc-300">{client.contactPerson || "-"}</div>
                       <div className="text-xs text-zinc-500 mt-0.5">{client.phone || "-"}</div>
                     </td>
-
+                    
                     {/* --- REPLACED TERMS COLUMN WITH EMAIL --- */}
                     <td className="px-6 py-4 text-zinc-600 dark:text-zinc-400">
                       {client.email || "-"}
@@ -469,8 +469,8 @@ export default function AdminClientInfo() {
 
                     <td className="px-6 py-4">
                       <span className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-medium border ${client.active !== false
-                        ? "bg-zinc-100 text-zinc-700 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700"
-                        : "bg-red-50 text-red-600 border-red-100 dark:bg-red-900/20 dark:text-red-400 dark:border-red-900/30"
+                          ? "bg-zinc-100 text-zinc-700 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700"
+                          : "bg-red-50 text-red-600 border-red-100 dark:bg-red-900/20 dark:text-red-400 dark:border-red-900/30"
                         }`}>
                         {client.active !== false ? "Active" : "Inactive"}
                       </span>

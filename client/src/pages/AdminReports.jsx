@@ -527,7 +527,7 @@ export default function AdminReports() {
               </div>
               <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 hover:shadow-md transition-shadow">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-semibold text-slate-600">Active Recruiters</span>
+                  <span className="text-sm font-semibold text-slate-600">Total Recruiters</span>
                   <Users className="h-4 w-4 text-purple-400" />
                 </div>
                 <div className="text-3xl font-bold text-slate-900">{overview.activeRecruiters}</div>

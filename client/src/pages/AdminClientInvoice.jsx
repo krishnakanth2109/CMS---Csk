@@ -3,6 +3,8 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
+import * as XLSX from "xlsx";
+
 
 import {
   BuildingOfficeIcon,
@@ -60,6 +62,17 @@ const numberToWords = (num) => {
   return output.trim() + " Rupees Only";
 };
 
+const triggerFileDownload = (blob, fileName) => {
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+};
+
 /* ================= Main Component ================= */
 
 const SectionCard = ({ title, icon: Icon, children }) => (
@@ -101,6 +114,8 @@ const AdminClientInvoice = () => {
     actualSalary: "",
     percentage: "",
     payment: 0,
+    cgstPercentage: "9",
+    sgstPercentage: "9",
     accountType: "default",
     accountDetails: defaultAccountDetails,
     selectedCandidates: [],
@@ -109,6 +124,7 @@ const AdminClientInvoice = () => {
   const [showPreview, setShowPreview] = useState(false);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState("");
   const [showCandidateList, setShowCandidateList] = useState(false);
+  const [downloadFormat, setDownloadFormat] = useState('pdf');
 
   const getAuthHeader = async () => ({
     "Content-Type": "application/json",
@@ -144,6 +160,8 @@ const AdminClientInvoice = () => {
       joiningDate: candidate.joiningDate ? candidate.joiningDate.split('T')[0] : new Date().toISOString().split("T")[0],
       actualSalary: ctc,
       percentage: p.percentage || 8.33,
+      cgstPercentage: "9",
+      sgstPercentage: "9"
     }));
     toast({ title: `Auto-filled details for ${candidate.name}` });
   };
@@ -197,8 +215,8 @@ const AdminClientInvoice = () => {
   const generateFilledPdf = async () => {
     setIsGenerating(true);
     try {
-      // 1. Fetch the exact empty PDF provided
-      const response = await fetch('/Empty_invoice.pdf');
+      // 1. Fetch the exact empty PDF provided (new template)
+      const response = await fetch(`/New_Template.pdf?v=${new Date().getTime()}`);
       const existingPdfBytes = await response.arrayBuffer();
 
       // 2. Load the PDF into pdf-lib
@@ -212,12 +230,12 @@ const AdminClientInvoice = () => {
 
       const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
       const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-
+      
       const drawText = (text, x, y, size = 9.5, isBold = false) => {
         if (!text || text === "undefined") return;
         firstPage.drawText(String(text).trim(), {
           x,
-          y: height - y - (size / 3), 
+          y: height - y - (size / 3),
           size,
           color: rgb(0, 0, 0),
           font: isBold ? helveticaBold : helvetica,
@@ -235,6 +253,7 @@ const AdminClientInvoice = () => {
           w = font.widthOfTextAtSize(t, sz);
         }
         const x = centerX - (w / 2);
+        
         firstPage.drawText(t, {
           x,
           y: height - y - (sz / 3),
@@ -248,6 +267,7 @@ const AdminClientInvoice = () => {
       // Note: Coordinates are estimated from standard layout and easily adjustable
 
       // -- Client details (Below 'To,') --
+      drawText("To,", 68, 140, 10, true);
       drawText(selectedClient?.companyName || "", 68, 155, 11, true);
 
       // Smart address formatting:
@@ -276,20 +296,36 @@ const AdminClientInvoice = () => {
         addressLines = lines;
       }
 
+      const invoiceDateStr = getOrdinalDate(form.invoiceDate);
+      let addressEndY = 170;
       if (selectedClient?.contactPerson) {
-        drawText(selectedClient.contactPerson, 68, 170, 10);
-        addressLines.forEach((line, i) => drawText(line, 68, 185 + i * 13, 10));
+        drawText(selectedClient.contactPerson, 68, 170, 10, true);
+        addressLines.forEach((line, i) => drawText(line, 68, 185 + i * 13, 10, true));
         const gstY = 185 + addressLines.length * 13;
-        if (selectedClient?.gstNumber) drawText(`GST : ${selectedClient.gstNumber}`, 68, gstY, 10);
+        if (selectedClient?.gstNumber) {
+          drawText(`GST : ${selectedClient.gstNumber}`, 68, gstY, 10, true);
+          addressEndY = gstY + 13;
+        } else {
+          addressEndY = gstY;
+        }
       } else {
-        addressLines.forEach((line, i) => drawText(line, 68, 170 + i * 13, 10));
+        addressLines.forEach((line, i) => drawText(line, 68, 170 + i * 13, 10, true));
         const gstY = 170 + addressLines.length * 13;
-        if (selectedClient?.gstNumber) drawText(`GST : ${selectedClient.gstNumber}`, 68, gstY, 10);
+        if (selectedClient?.gstNumber) {
+          drawText(`GST : ${selectedClient.gstNumber}`, 68, gstY, 10, true);
+          addressEndY = gstY + 13;
+        } else {
+          addressEndY = gstY;
+        }
       }
 
-      // -- Erase background "Date:" from template: RIGHT SIDE ONLY (X=370+) --
-      // TAX INVOICE is centered (~X 220-365), Date: label is on right (~X 370-415)
-      // Y band: top 278-315 covers where Date: sits, above where TAX INVOICE header is
+      // Draw date below address (Request 1: positioned beneath the address section)
+      // Request 3: Change to normal font (isBold=false)
+      drawText(invoiceDateStr, 468, addressEndY + 15, 10, true);
+      const afterAddressY = addressEndY + 35;
+
+      // -- Commented out masking to allow Background Watermark to be visible --
+      /*
       firstPage.drawRectangle({
         x: 370,
         y: height - 315,
@@ -299,11 +335,6 @@ const AdminClientInvoice = () => {
         opacity: 1,
       });
 
-      // -- Date: Aligned with template --
-      drawText(getOrdinalDate(form.invoiceDate), 468, 118, 10);
-
-      // -- Deep Clean of Template Table Layer --
-      // Using a slightly wider and taller mask to catch all border artifacts
       firstPage.drawRectangle({
         x: 45,
         y: height - 760,
@@ -311,13 +342,14 @@ const AdminClientInvoice = () => {
         height: 500, 
         color: rgb(1, 1, 1),
       });
+      */
 
       // -- Redraw No: and SUB: after cleaning (Aligned with table at X=68) --
-      drawText(`No: ${form.invoiceNumber}`, 68, 280, 10, true);
-      drawText("SUB: Final Invoice", 68, 298, 10, true);
+      drawText(`No: ${form.invoiceNumber}`, 68, Math.max(280, afterAddressY), 10, true);
+      drawText("SUB: Final Invoice", 68, Math.max(298, afterAddressY + 18), 10, true);
 
       // -- TAX INVOICE Title --
-      drawTextCentered("TAX INVOICE", width / 2, 320, 200, true, 14);
+      drawTextCentered("TAX INVOICE", width / 2, Math.max(320, afterAddressY + 40), 200, true, 14);
 
       const cands = form.selectedCandidates.length > 0 ? form.selectedCandidates : (form.candidateName ? [{name: form.candidateName, role: form.role, joiningDate: form.joiningDate, actualSalary: form.actualSalary, percentage: form.percentage, payment: form.payment}] : []);
       
@@ -325,13 +357,13 @@ const AdminClientInvoice = () => {
       const candidateCount = cands.length;
       const isLargeList = candidateCount > 5;
       
-      let rowHR = 22; 
-      let rowDR = isLargeList ? 21 : 26; 
+      let rowHR = 18; 
+      let rowDR = isLargeList ? 15 : 18; 
       let currentY = isLargeList ? 342 : 345;
-      const headerFs = 10;
-      const dataFs = isLargeList ? 8.5 : 9.5;
-      const accFs = isLargeList ? 8.5 : 10;
-      const accSpacing = isLargeList ? 13 : 16;
+      const headerFs = 8.5;
+      const dataFs = isLargeList ? 7.5 : 8;
+      const accFs = isLargeList ? 8 : 9;
+      const accSpacing = isLargeList ? 11 : 13;
 
       const colStarts = [68, 96, 201, 281, 356, 426, 476];
       const colWidths = [28, 105, 80, 75, 70, 50, 70];
@@ -341,7 +373,7 @@ const AdminClientInvoice = () => {
       const drawCell = (text, x, w, y, h, align = 'center', isBold = false, fs = dataFs) => {
         firstPage.drawRectangle({
           x, y: height - (y + h/2), width: w, height: h,
-          borderColor: rgb(0,0,0), borderWidth: 0.7, color: rgb(1,1,1)
+          borderColor: rgb(0,0,0), borderWidth: 0.7
         });
         if (text) {
           if (align === 'center') drawTextCentered(text, x + w/2, y, w-4, isBold, fs);
@@ -363,7 +395,7 @@ const AdminClientInvoice = () => {
         const nameText = String(c.name || "");
         firstPage.drawRectangle({
           x: colStarts[1], y: height - (currentY + rowDR/2), width: colWidths[1], height: rowDR,
-          borderColor: rgb(0,0,0), borderWidth: 0.7, color: rgb(1,1,1)
+          borderColor: rgb(0,0,0), borderWidth: 0.7
         });
 
         if (nameText.length > 18) {
@@ -377,24 +409,49 @@ const AdminClientInvoice = () => {
         }
 
         drawCell(c.role || "", colStarts[2], colWidths[2], currentY, rowDR);
-        drawCell(c.joiningDate ? getOrdinalDate(c.joiningDate) : "", colStarts[3], colWidths[3], currentY, rowDR);
+        drawCell(c.joiningDate ? getOrdinalDate(c.joiningDate) : "", colStarts[3], colWidths[3], currentY, rowDR, 'center', false);
         drawCell(Number(c.actualSalary || 0).toLocaleString("en-IN"), colStarts[4], colWidths[4], currentY, rowDR);
         drawCell(`${c.percentage || 0}%`, colStarts[5], colWidths[5], currentY, rowDR);
         drawCell(Number(c.payment || 0).toLocaleString("en-IN"), colStarts[6], colWidths[6], currentY, rowDR);
         currentY += rowDR;
       });
 
-      const tH = isLargeList ? 24 : 30;
-      firstPage.drawRectangle({
-        x: colStarts[0], y: height - (currentY + tH/2), width: colStarts[6] + colWidths[6] - colStarts[0], height: tH,
-        borderColor: rgb(0,0,0), borderWidth: 0.7, color: rgb(1,1,1)
-      });
-      drawText("Total", colStarts[6] - 45, currentY, 10, true);
-      drawTextCentered(totalPay.toLocaleString("en-IN"), colCenters[6], currentY, colWidths[6]-4, true, 10);
+      const totalCgstAmt = Math.round((totalPay * parseFloat(form.cgstPercentage || 0)) / 100);
+      const totalSgstAmt = Math.round((totalPay * parseFloat(form.sgstPercentage || 0)) / 100);
+      const grandTotalAmt = totalPay + totalCgstAmt + totalSgstAmt;
+
+      const tH = isLargeList ? 16 : 18;
+      
+      const drawSummaryRow = (label, amount, yOffset, isBold = true) => {
+        const y = currentY + yOffset;
+        firstPage.drawRectangle({
+          x: colStarts[0], y: height - (y + tH/2), width: colStarts[6] - colStarts[0], height: tH,
+          borderColor: rgb(0,0,0), borderWidth: 0.7
+        });
+        firstPage.drawRectangle({
+          x: colStarts[6], y: height - (y + tH/2), width: colWidths[6], height: tH,
+          borderColor: rgb(0,0,0), borderWidth: 0.7
+        });
+        const w = (isBold ? helveticaBold : helvetica).widthOfTextAtSize(label, 10);
+        firstPage.drawText(label, { 
+            x: colStarts[6] - 15 - w, 
+            y: height - y - 3.33, 
+            size: 10, 
+            font: isBold ? helveticaBold : helvetica, 
+            color: rgb(0,0,0) 
+        });
+        drawTextCentered(amount.toLocaleString("en-IN"), colCenters[6], y, colWidths[6]-4, isBold, 10);
+      };
+
+      drawSummaryRow(`CGST (${form.cgstPercentage || 0}%)`, totalCgstAmt, 0, false);
+      drawSummaryRow(`SGST (${form.sgstPercentage || 0}%)`, totalSgstAmt, tH, false);
+      drawSummaryRow("Grand Total", grandTotalAmt, tH * 2, true);
+
+      currentY += tH * 2;
 
       const footerY = currentY + (isLargeList ? 25 : 40);
       drawText("In Words : ", 68, footerY, 10, true);
-      drawText(numberToWords(totalPay).toUpperCase(), 125, footerY, isLargeList ? 8.5 : 9.5);
+      drawText(numberToWords(grandTotalAmt).toUpperCase(), 125, footerY, isLargeList ? 8.5 : 9.5);
 
       const accY = footerY + (isLargeList ? 35 : 50);
       if (form.accountType !== "no") {
@@ -413,8 +470,8 @@ const AdminClientInvoice = () => {
         });
       }
 
-      // -- Signature Block (Left Aligned) --
-      const sigOffset = form.accountType !== "no" ? (accSpacing * 8) + 15 : 20;
+      // -- Signature Block (Left Aligned) -- (Request 2: Added more space for stamp/sig)
+      const sigOffset = form.accountType !== "no" ? (accSpacing * 10) + 80 : 110;
       const sigY = accY + sigOffset;
       drawText("Navya S", 68, sigY, 11, true);
       drawText("Vagarious Solutions Pvt Ltd", 68, sigY + 16, 11, true);
@@ -426,7 +483,7 @@ const AdminClientInvoice = () => {
 
     } catch (error) {
       console.error("PDF Generation error:", error);
-      toast({ title: "Failed to load/generate PDF template.", variant: "destructive" });
+      toast({ title: `PDF Error: ${error?.message || error}`, variant: "destructive", duration: 7000 });
       return null;
     } finally {
       setIsGenerating(false);
@@ -446,12 +503,428 @@ const AdminClientInvoice = () => {
   };
 
   const handleDownload = async () => {
-    const blob = await generateFilledPdf();
-    if (blob) {
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = `Invoice_${form.invoiceNumber}.pdf`;
-      link.click();
+    if (downloadFormat === 'pdf') {
+      const blob = await generateFilledPdf();
+      if (blob) {
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `Invoice_${form.invoiceNumber}.pdf`;
+        link.click();
+      }
+    } else if (downloadFormat === 'word') {
+      await downloadAsWord();
+    } else if (downloadFormat === 'excel') {
+      downloadAsExcel();
+    }
+  };
+
+  const downloadAsExcel = () => {
+    const wsData = [
+      ["TAX INVOICE"],
+      [],
+      ["Invoice Number:", form.invoiceNumber, "", "Date:", getOrdinalDate(form.invoiceDate)],
+      ["To:"],
+      [selectedClient?.companyName || ""],
+      [selectedClient?.address || ""],
+      ["Contact:", selectedClient?.contactPerson || "", "GST:", selectedClient?.gstNumber || ""],
+      [],
+      ["S.No", "Candidate Name", "Role", "Joining Date", "Actual Salary", "Percentage", "Payment"]
+    ];
+
+    let totalPay = 0;
+    const cands = form.selectedCandidates.length > 0 ? form.selectedCandidates : (form.candidateName ? [{name: form.candidateName, role: form.role, joiningDate: form.joiningDate, actualSalary: form.actualSalary, percentage: form.percentage, payment: form.payment}] : []);
+    
+    cands.forEach((c, i) => {
+        totalPay += parseFloat(c.payment) || 0;
+        wsData.push([
+           i + 1,
+           c.name,
+           c.role,
+           getOrdinalDate(c.joiningDate),
+           c.actualSalary,
+           `${c.percentage || 0}%`,
+           c.payment
+        ]);
+    });
+
+    const totalCgstAmt = Math.round((totalPay * parseFloat(form.cgstPercentage || 0)) / 100);
+    const totalSgstAmt = Math.round((totalPay * parseFloat(form.sgstPercentage || 0)) / 100);
+    const grandTotalAmt = totalPay + totalCgstAmt + totalSgstAmt;
+
+    wsData.push([]);
+    wsData.push(["", "", "", "", "", `CGST (${form.cgstPercentage || 0}%):`, totalCgstAmt]);
+    wsData.push(["", "", "", "", "", `SGST (${form.sgstPercentage || 0}%):`, totalSgstAmt]);
+    wsData.push(["", "", "", "", "", "Grand Total:", grandTotalAmt]);
+    wsData.push([]);
+    wsData.push(["In Words:", numberToWords(grandTotalAmt).toUpperCase()]);
+
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Invoice");
+    XLSX.writeFile(wb, `Invoice_${form.invoiceNumber}.xlsx`);
+    toast({ title: "Invoice downloaded as Excel" });
+  };
+
+  const downloadAsWord = async () => {
+    setIsGenerating(true);
+    try {
+      const response = await fetch(`/New_Template.pdf?v=${new Date().getTime()}`);
+      const existingPdfBytes = await response.arrayBuffer();
+      const tempPdfDoc = await PDFDocument.load(existingPdfBytes);
+      const tempPage = tempPdfDoc.getPages()[0];
+      const { height } = tempPage.getSize();
+
+      // -- Commented out masking to allow Background Watermark to be visible --
+      /*
+      tempPage.drawRectangle({
+        x: 370,
+        y: height - 315,
+        width: 230,
+        height: 40,
+        color: rgb(1, 1, 1)
+      });
+      tempPage.drawRectangle({
+        x: 50,
+        y: height - 260,
+        width: 230,
+        height: 125,
+        color: rgb(1, 1, 1)
+      });
+      tempPage.drawRectangle({
+        x: 45,
+        y: height - 760,
+        width: 520,
+        height: 500,
+        color: rgb(1, 1, 1)
+      });
+      */
+
+      const cleanPdfBytes = await tempPdfDoc.save();
+      const pdfBlob = new Blob([cleanPdfBytes], { type: "application/pdf" });
+
+      const pdfjsLib = await import('pdfjs-dist');
+      const workerModule = await import('pdfjs-dist/build/pdf.worker.min.mjs?url');
+      pdfjsLib.GlobalWorkerOptions.workerSrc = workerModule.default;
+
+      const pdfArrayBuffer = await pdfBlob.arrayBuffer();
+      const pdfDoc = await pdfjsLib.getDocument({ data: pdfArrayBuffer }).promise;
+      const page = await pdfDoc.getPage(1);
+      const viewport = page.getViewport({ scale: 5.0 });
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const ctx = canvas.getContext('2d');
+
+      if (!ctx) {
+        throw new Error("Unable to prepare Word background");
+      }
+
+      await page.render({ canvasContext: ctx, viewport }).promise;
+
+      const imageBlob = await new Promise((resolve, reject) => {
+        canvas.toBlob((blob) => {
+          if (blob) resolve(blob);
+          else reject(new Error("Failed to build Word background"));
+        }, 'image/png', 1.0);
+      });
+      const imageArrayBuffer = await imageBlob.arrayBuffer();
+
+      const {
+        Document: DocxDocument,
+        Packer: DocxPacker,
+        Paragraph: DocxParagraph,
+        TextRun: DocxTextRun,
+        ImageRun: DocxImageRun,
+        Table,
+        TableRow,
+        TableCell,
+        WidthType,
+        AlignmentType,
+        VerticalAlign,
+        BorderStyle,
+        HorizontalPositionRelativeFrom,
+        HorizontalPositionAlign,
+        VerticalPositionRelativeFrom,
+        VerticalPositionAlign,
+        TableLayoutType,
+      } = await import("docx");
+
+      const cands = form.selectedCandidates.length > 0
+        ? form.selectedCandidates
+        : (form.candidateName
+          ? [{ name: form.candidateName, role: form.role, joiningDate: form.joiningDate, actualSalary: form.actualSalary, percentage: form.percentage, payment: form.payment }]
+          : []);
+
+      let totalPay = 0;
+      cands.forEach((c) => { totalPay += (parseFloat(c.payment) || 0); });
+
+      const totalCgstAmt = Math.round((totalPay * parseFloat(form.cgstPercentage || 0)) / 100);
+      const totalSgstAmt = Math.round((totalPay * parseFloat(form.sgstPercentage || 0)) / 100);
+      const grandTotalAmt = totalPay + totalCgstAmt + totalSgstAmt;
+
+      const ptToTwip = (pt) => Math.round(pt * 20);
+
+      const makeText = (text, opts = {}) => new DocxTextRun({
+        text: String(text || ""),
+        font: "Helvetica",
+        size: ptToTwip(opts.size || 9.5) / 10,
+        bold: opts.bold || false,
+        color: opts.color || "000000",
+      });
+
+      const makeParagraph = (text, opts = {}) => new DocxParagraph({
+        children: [makeText(text, opts)],
+        alignment: opts.align === 'right'
+          ? AlignmentType.RIGHT
+          : opts.align === 'center'
+            ? AlignmentType.CENTER
+            : AlignmentType.LEFT,
+        spacing: { after: ptToTwip(opts.spaceAfter || 0), before: ptToTwip(opts.spaceBefore || 0) },
+      });
+
+      const thinBorder = { style: BorderStyle.SINGLE, size: 2, color: "000000" };
+      const allBorders = { top: thinBorder, bottom: thinBorder, left: thinBorder, right: thinBorder };
+      const noBorder = { style: BorderStyle.NONE, size: 0, color: "FFFFFF" };
+      const noBorders = { top: noBorder, bottom: noBorder, left: noBorder, right: noBorder };
+
+      const rawParts = (selectedClient?.address || "").split(",").map(p => p.trim()).filter(Boolean);
+      let addressLines = [];
+      if (rawParts.length <= 2) {
+        addressLines = rawParts;
+      } else {
+        const city = rawParts[rawParts.length - 2];
+        const state = rawParts[rawParts.length - 1];
+        const middleParts = rawParts.slice(0, rawParts.length - 2);
+        const buildingPattern = /\d|floor|f\.no|no\.|h\.no|plot|flat|door|d\.no|beside|above|below|near|opp|block|wing|phase|sector|tower|unit|suite|rd\s|street|building|complex|nagar/i;
+        const buildingParts = middleParts.filter(p => buildingPattern.test(p));
+        const areaParts = middleParts.filter(p => !buildingPattern.test(p));
+        const lines = [];
+        if (buildingParts.length > 0) lines.push(buildingParts.join(", "));
+        areaParts.forEach(a => lines.push(a));
+        lines.push(city, state);
+        addressLines = lines;
+      }
+
+      const children = [];
+
+      children.push(new DocxParagraph({
+        children: [
+          new DocxImageRun({
+            data: imageArrayBuffer,
+            transformation: { width: 794, height: 1123 },
+            floating: {
+              horizontalPosition: {
+                relative: HorizontalPositionRelativeFrom.PAGE,
+                align: HorizontalPositionAlign.CENTER,
+              },
+              verticalPosition: {
+                relative: VerticalPositionRelativeFrom.PAGE,
+                align: VerticalPositionAlign.TOP,
+              },
+              behindDocument: true,
+              wrap: { type: 0 },
+            },
+          }),
+        ],
+        spacing: { after: 0, before: 0 },
+      }));
+
+      const headerTable = new Table({
+        rows: [
+          new TableRow({
+            children: [
+              new TableCell({
+                children: [makeParagraph("", { size: 10, bold: true, spaceAfter: 0 })],
+                borders: noBorders,
+                width: { size: ptToTwip(239), type: WidthType.DXA },
+              }),
+              new TableCell({
+                children: [makeParagraph("", { size: 10, bold: true, align: 'right', spaceAfter: 0 })],
+                borders: noBorders,
+                width: { size: ptToTwip(239), type: WidthType.DXA },
+              }),
+            ],
+          }),
+        ],
+        columnWidths: [ptToTwip(239), ptToTwip(239)],
+        borders: noBorders,
+        width: { size: ptToTwip(478), type: WidthType.DXA },
+        layout: TableLayoutType.FIXED,
+      });
+
+      children.push(headerTable);
+      children.push(makeParagraph("", { size: 4, spaceAfter: 5 }));
+      children.push(makeParagraph("To,", { size: 10, bold: true, spaceAfter: 1 }));
+      children.push(makeParagraph(selectedClient?.companyName || "", { size: 10, bold: true, spaceAfter: 1 }));
+
+      if (selectedClient?.contactPerson) {
+        children.push(makeParagraph(selectedClient.contactPerson, { size: 9, bold: true, spaceAfter: 1 }));
+      }
+
+      addressLines.forEach((line) => {
+        children.push(makeParagraph(line, { size: 9, bold: true, spaceAfter: 1 }));
+      });
+
+      if (selectedClient?.gstNumber) {
+        children.push(makeParagraph(`GST : ${selectedClient.gstNumber}`, { size: 9, bold: true, spaceAfter: 4 }));
+      }
+
+      // Request 1: Date below address
+      // Request 3: Normal font (bold: false)
+      children.push(makeParagraph(`Date: ${getOrdinalDate(form.invoiceDate)}`, { size: 10, bold: true, align: 'right', spaceAfter: 20 }));
+
+      children.push(new DocxParagraph({ children: [], spacing: { after: ptToTwip(15) } }));
+      children.push(makeParagraph(`No: ${form.invoiceNumber}`, { size: 10, bold: true, spaceAfter: 2 }));
+      children.push(makeParagraph("SUB: Final Invoice", { size: 10, bold: true, spaceAfter: 6 }));
+
+      children.push(new DocxParagraph({
+        children: [makeText("TAX INVOICE", { size: 12, bold: true })],
+        alignment: AlignmentType.CENTER,
+        spacing: { after: ptToTwip(6), before: ptToTwip(2) },
+      }));
+
+      const colWidthsPt = [28, 105, 80, 75, 70, 50, 70];
+      const colWidthsTwip = colWidthsPt.map(w => ptToTwip(w));
+
+      const makeCell = (text, colIdx, opts = {}) => new TableCell({
+        children: [new DocxParagraph({
+          children: [makeText(text, { size: opts.fontSize || 8, bold: opts.bold || false })],
+          alignment: opts.align === 'left'
+            ? AlignmentType.LEFT
+            : opts.align === 'right'
+              ? AlignmentType.RIGHT
+              : AlignmentType.CENTER,
+        })],
+        width: { size: colWidthsTwip[colIdx], type: WidthType.DXA },
+        borders: allBorders,
+        verticalAlign: VerticalAlign.CENTER,
+        margins: { top: ptToTwip(3), bottom: ptToTwip(3), left: ptToTwip(2), right: ptToTwip(2) },
+        ...(opts.columnSpan ? { columnSpan: opts.columnSpan } : {}),
+      });
+
+      const headers = ["S.No", "Candidate Name", "Role", "Joining Date", "Actual Salary", "Percentage", "Payment"];
+      const headerRow = new TableRow({
+        children: headers.map((h, i) => makeCell(h, i, { bold: true, fontSize: 8.5 })),
+        tableHeader: true,
+      });
+
+      const dataRows = cands.map((c, idx) => new TableRow({
+        children: [
+          makeCell(String(idx + 1), 0, { fontSize: 8 }),
+          makeCell(c.name || "", 1, { fontSize: 8, align: 'center' }),
+          makeCell(c.role || "", 2, { fontSize: 8, align: 'center' }),
+          makeCell(c.joiningDate ? getOrdinalDate(c.joiningDate) : "", 3, { fontSize: 8, bold: false, align: 'center' }),
+          makeCell(Number(c.actualSalary || 0).toLocaleString("en-IN"), 4, { fontSize: 8, align: 'center' }),
+          makeCell(`${c.percentage || 0}%`, 5, { fontSize: 8, align: 'center' }),
+          makeCell(Number(c.payment || 0).toLocaleString("en-IN"), 6, { fontSize: 8, align: 'center' }),
+        ],
+      }));
+
+      const makeSummaryRow = (label, amount, isBold = false) => {
+        const labelSpanWidth = colWidthsTwip.slice(0, 6).reduce((a, b) => a + b, 0);
+        return new TableRow({
+          children: [
+            new TableCell({
+              children: [new DocxParagraph({
+                children: [makeText(label, { size: 9, bold: isBold })],
+                alignment: AlignmentType.RIGHT,
+                spacing: { after: 0, before: 0 },
+              })],
+              width: { size: labelSpanWidth, type: WidthType.DXA },
+              columnSpan: 6,
+              borders: allBorders,
+              verticalAlign: VerticalAlign.CENTER,
+              margins: { top: ptToTwip(3), bottom: ptToTwip(3), left: ptToTwip(2), right: ptToTwip(6) },
+            }),
+            makeCell(amount.toLocaleString("en-IN"), 6, { bold: isBold, fontSize: 9, align: 'center' }),
+          ],
+        });
+      };
+
+      const invoiceTable = new Table({
+        rows: [
+          headerRow,
+          ...dataRows,
+          makeSummaryRow(`CGST (${form.cgstPercentage || 0}%)`, totalCgstAmt, false),
+          makeSummaryRow(`SGST (${form.sgstPercentage || 0}%)`, totalSgstAmt, false),
+          makeSummaryRow("Grand Total", grandTotalAmt, true),
+        ],
+        columnWidths: colWidthsTwip,
+        width: { size: ptToTwip(478), type: WidthType.DXA },
+        layout: TableLayoutType.FIXED,
+      });
+
+      children.push(invoiceTable);
+
+      const wordsString = numberToWords(grandTotalAmt).toUpperCase();
+      let wordsFontSize = 9;
+      if (wordsString.length > 55) wordsFontSize = 8;
+      if (wordsString.length > 75) wordsFontSize = 7.5;
+      if (wordsString.length > 85) wordsFontSize = 7.5;
+
+      children.push(new DocxParagraph({
+        children: [
+          makeText("In Words : ", { size: 9, bold: true }),
+          makeText(wordsString, { size: wordsFontSize, bold: false }),
+        ],
+        spacing: { before: ptToTwip(12), after: ptToTwip(15) },
+      }));
+
+      if (form.accountType !== "no") {
+        children.push(makeParagraph("Account Details: -", { size: 10, bold: true, spaceAfter: 4 }));
+
+        const accDetails = [
+          `Account No. : ${form.accountDetails.accountNumber}`,
+          `Name : ${form.accountDetails.name}`,
+          `Bank : ${form.accountDetails.bank}`,
+          `Branch : ${form.accountDetails.branch}`,
+          `IFSC Code : ${form.accountDetails.ifsc}`,
+          `PAN No. : ${form.accountDetails.pan}`,
+          `GST : ${form.accountDetails.gst}`,
+        ];
+
+        accDetails.forEach((line) => {
+          children.push(makeParagraph(line, { size: 9, bold: true, spaceAfter: 1 }));
+        });
+      }
+
+      // Request 2: More space for signature/stamp
+      children.push(new DocxParagraph({ children: [], spacing: { after: ptToTwip(60) } }));
+      children.push(makeParagraph("Navya S", { size: 10, bold: true, spaceAfter: 1 }));
+      children.push(makeParagraph("Vagarious Solutions Pvt Ltd", { size: 10, bold: true, spaceAfter: 0 }));
+
+      const PAGE_W_TWIP = 11906;
+      const PAGE_H_TWIP = 16838;
+
+      const doc = new DocxDocument({
+        sections: [
+          {
+            properties: {
+              page: {
+                size: { width: PAGE_W_TWIP, height: PAGE_H_TWIP },
+                margin: {
+                  top: ptToTwip(135),
+                  right: ptToTwip(49),
+                  bottom: ptToTwip(40),
+                  left: ptToTwip(68),
+                },
+              },
+            },
+            children,
+          },
+        ],
+      });
+
+      const blob = await DocxPacker.toBlob(doc);
+      triggerFileDownload(blob, `Invoice_${form.invoiceNumber}.docx`);
+
+      toast({ title: "Invoice downloaded as editable Word" });
+
+    } catch (error) {
+      console.error("Word Generation error:", error);
+      toast({ title: `Word Error: ${error?.message || error}`, variant: "destructive", duration: 7000 });
+    } finally {
+      setIsGenerating(false);
     }
   };
 
@@ -578,6 +1051,28 @@ const AdminClientInvoice = () => {
                   className={`${inputCls} bg-gray-100 font-bold text-green-700 cursor-not-allowed`}
                 />
               </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-gray-700">CGST (%)</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={form.cgstPercentage}
+                  onChange={(e) => setForm({ ...form, cgstPercentage: e.target.value })}
+                  className={inputCls}
+                  placeholder="E.g. 2"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-gray-700">SGST (%)</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={form.sgstPercentage}
+                  onChange={(e) => setForm({ ...form, sgstPercentage: e.target.value })}
+                  className={inputCls}
+                  placeholder="E.g. 2"
+                />
+              </div>
 
               <div className="col-span-1 md:col-span-2 lg:col-span-3 flex justify-end items-center gap-3 pt-2">
                 {form.selectedCandidates.length > 0 && (
@@ -663,6 +1158,30 @@ const AdminClientInvoice = () => {
                       </tbody>
                     </table>
                   </div>
+                  <div className="bg-white p-4 flex flex-col items-end border-t border-blue-100 text-sm w-full">
+                    <div className="w-64 space-y-2 text-gray-700">
+                      <div className="flex justify-between">
+                        <span>Sub Total:</span>
+                        <span className="font-semibold text-gray-900">₹{form.selectedCandidates.reduce((s, c) => s + c.payment, 0).toLocaleString('en-IN')}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>CGST ({form.cgstPercentage || 0}%):</span>
+                        <span className="font-semibold text-gray-900">₹{Math.round((form.selectedCandidates.reduce((s, c) => s + c.payment, 0) * (parseFloat(form.cgstPercentage) || 0)) / 100).toLocaleString('en-IN')}</span>
+                      </div>
+                      <div className="flex justify-between border-b pb-2">
+                        <span>SGST ({form.sgstPercentage || 0}%):</span>
+                        <span className="font-semibold text-gray-900">₹{Math.round((form.selectedCandidates.reduce((s, c) => s + c.payment, 0) * (parseFloat(form.sgstPercentage) || 0)) / 100).toLocaleString('en-IN')}</span>
+                      </div>
+                      <div className="flex justify-between font-bold text-base text-gray-900 pt-1">
+                        <span>Grand Total:</span>
+                        <span className="text-blue-700">₹{(
+                          form.selectedCandidates.reduce((s, c) => s + c.payment, 0) +
+                          Math.round((form.selectedCandidates.reduce((s, c) => s + c.payment, 0) * (parseFloat(form.cgstPercentage) || 0)) / 100) +
+                          Math.round((form.selectedCandidates.reduce((s, c) => s + c.payment, 0) * (parseFloat(form.sgstPercentage) || 0)) / 100)
+                        ).toLocaleString('en-IN')}</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -742,13 +1261,22 @@ const AdminClientInvoice = () => {
             </div>
           </SectionCard>
 
-          <div className="flex justify-end">
+          <div className="flex justify-end items-center gap-3">
+            <select
+                value={downloadFormat}
+                onChange={(e) => setDownloadFormat(e.target.value)}
+                className="px-4 py-3 border border-gray-300 rounded-lg font-medium outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            >
+                <option value="pdf">PDF Format (.pdf)</option>
+                <option value="word">Word Format (.doc)</option>
+                <option value="excel">Excel Format (.xlsx)</option>
+            </select>
             <button
               className="px-6 py-3 bg-green-600 text-white rounded-lg font-bold hover:bg-green-700 transition shadow-md text-lg disabled:opacity-50"
               onClick={handleDownload}
-              disabled={isGenerating}
+              disabled={isGenerating && downloadFormat === 'pdf'}
             >
-              {isGenerating ? "Generating..." : "Download Final PDF"}
+              {isGenerating && downloadFormat === 'pdf' ? "Generating..." : "Download Invoice"}
             </button>
           </div>
 
@@ -767,11 +1295,20 @@ const AdminClientInvoice = () => {
               Generating precise PDF view...
             </div>
           )}
-          <div className="p-4 bg-white border-t flex justify-end">
+          <div className="p-4 bg-white border-t flex justify-end gap-3 items-center">
+            <select
+                value={downloadFormat}
+                onChange={(e) => setDownloadFormat(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded font-medium"
+            >
+                <option value="pdf">PDF (.pdf)</option>
+                <option value="word">Word (.doc)</option>
+                <option value="excel">Excel (.xlsx)</option>
+            </select>
             <button
               className="px-6 py-2 bg-green-600 text-white rounded-lg font-bold hover:bg-green-700 transition"
               onClick={handleDownload}
-              disabled={isGenerating}
+              disabled={isGenerating && downloadFormat === 'pdf'}
             >
               Download This Invoice
             </button>

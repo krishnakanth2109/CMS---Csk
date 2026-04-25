@@ -22,6 +22,7 @@ import jobRoutes       from './routes/jobRoutes.js';
 import interviewRoutes from './routes/interviewRoutes.js';
 import messageRoutes   from './routes/messageRoutes.js';
 import channelRoutes  from './routes/channelRoutes.js';
+import aiMockRoutes   from './routes/aiMockRoutes.js';
 
 // ── Agreement Module Routes ───────────────────────────────────────────────────
 import { connectAgreementDB } from './config/agreementDatabase.js';
@@ -30,7 +31,7 @@ import agreementLetterRoutes  from './routes/agreementLetterRoutes.js';
 import agreementEmailRoutes   from './routes/agreementEmailRoutes.js';
 import agreementUploadRoutes  from './routes/agreementUploadRoutes.js';
 
-// ── __dirname shim for ES Modules ─────────────────────────────────────────────
+// ── __dirname shim for ES Modules ────────────────────────────────────────────
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
 
@@ -40,12 +41,15 @@ if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 const app        = express();
 const httpServer = createServer(app);
 
+const FRONTEND_URL = (process.env.FRONTEND_URL || 'http://localhost:5173').trim().replace(/\/$/, '');
+
 // ─────────────────────────────────────────────────────────────────────────────
-// FIX: Added 'vagarious-cms.netlify.app' to CORS allowed origins.
+// FIX: Use configured FRONTEND_URL and avoid collisions with other local projects.
 // ─────────────────────────────────────────────────────────────────────────────
 const ALLOWED_ORIGINS = [
-  'https://vagarious-cms.netlify.app',
+  FRONTEND_URL,
   'http://localhost:5173',
+  'https://vagarious-cms.netlify.app',
   'http://localhost:5000',
 ];
 
@@ -69,6 +73,7 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use(express.static(path.join(__dirname, 'forenten')));
 
 // ── Database ───────────────────────────────────────────────────────────────────
 const connectDB = async () => {
@@ -80,11 +85,19 @@ const connectDB = async () => {
     process.exit(1);
   }
 };
-connectDB();   
 
-// Connect Agreement module DB (nativ
-// e MongoDB driver)
-connectAgreementDB().catch(err => console.warn('Agreement DB not connected:', err.message));
+const startServer = async () => {
+  await connectDB();
+  // Connect Agreement module DB (native MongoDB driver)
+  connectAgreementDB().catch(err => console.warn('Agreement DB not connected:', err.message));
+  const PORT = process.env.PORT || 5000;
+  httpServer.listen(PORT, () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`🔌 Socket.IO with DB: ${mongoose.connection.db?.databaseName}`);
+  });
+};
+
+startServer();
 
 // ── Socket.IO events ───────────────────────────────────────────────────────────
 io.on('connection', (socket) => {
@@ -151,6 +164,7 @@ app.use('/api/jobs',       jobRoutes);
 app.use('/api/interviews', interviewRoutes);
 app.use('/api/messages',   messageRoutes);
 app.use('/api/channels',   channelRoutes);
+app.use('/api/ai-mock',    aiMockRoutes);
 
 // ── Agreement Module Routes ────────────────────────────────────────────────────
 app.use('/agreement-companies', agreementCompanyRoutes);
@@ -167,6 +181,13 @@ app.use('/jobs',       jobRoutes);
 app.use('/interviews', interviewRoutes);
 app.use('/messages',   messageRoutes);
 app.use('/channels',   channelRoutes);
+app.use('/ai-mock',    aiMockRoutes);
+
+// Mount AI mock routes at root so index.html can call /start-session-interview etc. directly
+app.use('/',           aiMockRoutes);
+
+// ── Serve AI Mock Static Files ────────────────────────────────────────────────
+// Already served from root above
 
 app.get('/', (_req, res) => {
   res.json({ message: 'API is running with Socket.IO & File Uploads...' });
@@ -284,9 +305,6 @@ app.get('/api/reports', protect, authorize('admin', 'manager'), async (req, res)
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // GET /api/reports/recruiter — Per-recruiter own stats
-// FIX: status is an ARRAY — use hasStatus() for all checks
-//      Weekly: rolling last 4 weeks (not current-month-only) so historical data shows
-//      Monthly: last 12 months (not 6) so older candidates are visible
 // ═══════════════════════════════════════════════════════════════════════════════
 app.get('/api/reports/recruiter', protect, async (req, res) => {
   try {
@@ -297,7 +315,6 @@ app.get('/api/reports/recruiter', protect, async (req, res) => {
       'Final Interview','Technical Round','Technical Interview','HR Round','HR Interview','Interview',
     ]);
 
-    // Fetch ALL candidates for this recruiter (both _id and recruiterName match)
     const all = await Candidate.find({
       $or: [
         { recruiterId: recruiterId },
@@ -307,7 +324,6 @@ app.get('/api/reports/recruiter', protect, async (req, res) => {
       .select('status createdAt')
       .lean();
 
-    // status is stored as an ARRAY — always use these helpers
     const hasStatus = (c, s) => {
       const arr = Array.isArray(c.status) ? c.status : [c.status || ''];
       return arr.includes(s);
@@ -326,19 +342,14 @@ app.get('/api/reports/recruiter', protect, async (req, res) => {
     const successRate              = totalSubmissions > 0
       ? Math.round((joined / totalSubmissions) * 100) : 0;
 
-    // ── W1–W4: rolling last 4 weeks backwards from today ────────────────────
-    // W1 = 3 weeks ago, W2 = 2 weeks ago, W3 = last week, W4 = this week
-    // This covers historical data regardless of what month candidates were added in.
     const now        = new Date();
     const weeklyData = [];
 
     for (let w = 3; w >= 0; w--) {
-      // End of this week-slot
       const wEnd = new Date(now);
       wEnd.setDate(now.getDate() - w * 7);
       wEnd.setHours(23, 59, 59, 999);
 
-      // Start = 6 days before wEnd
       const wStart = new Date(wEnd);
       wStart.setDate(wEnd.getDate() - 6);
       wStart.setHours(0, 0, 0, 0);
@@ -359,8 +370,6 @@ app.get('/api/reports/recruiter', protect, async (req, res) => {
       });
     }
 
-    // ── 12-month breakdown — covers up to a full year of history ────────────
-    // Only includes months that have data OR the standard last 6 months
     const MONTHS      = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     const monthlyData = [];
     for (let i = 11; i >= 0; i--) {
@@ -371,7 +380,6 @@ app.get('/api/reports/recruiter', protect, async (req, res) => {
         const cd = new Date(c.createdAt);
         return cd >= mStart && cd <= mEnd;
       });
-      // Include month if it has data OR it's within the last 6 months
       if (mC.length > 0 || i < 6) {
         monthlyData.push({
           month:      MONTHS[d.getMonth()],
@@ -408,11 +416,4 @@ app.get('/api/reports/recruiter', protect, async (req, res) => {
 app.use((err, _req, res, _next) => {
   console.error('Server Error Log:', err.stack);
   res.status(500).json({ error: 'Internal Server Error', details: err.message });
-});
-
-// ── Start ──────────────────────────────────────────────────────────────────────
-const PORT = process.env.PORT || 5000;
-httpServer.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`🔌 Socket.IO initialized`);
 });

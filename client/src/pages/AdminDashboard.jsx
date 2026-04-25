@@ -227,16 +227,21 @@ export default function AdminDashboard() {
           pending:     cands.filter(c => ['submitted', 'pending'].includes(getSafeStatus(c.status))).length,
           hold:        cands.filter(c => getSafeStatus(c.status) === 'hold').length,
           rejected:    cands.filter(c => getSafeStatus(c.status) === 'rejected').length,
+          selected:    cands.filter(c => getSafeStatus(c.status) === 'selected').length,
         };
       })
       .filter(r => r.fullName !== '')
       .sort((a, b) => b.submissions - a.submissions);
   }, [candidates, recruiters]);
 
-  // FIX 12: barData was computed inline in JSX on every render.
-  //         Now memoized — only recomputes when recruiterStats changes.
+  // ── FIX 12: barData updated to include Submissions, Selected, and Rejected ──
   const barData = useMemo(
-    () => recruiterStats.slice(0, 6).map(r => ({ name: r.fullName.split(' ')[0], value: r.submissions })),
+    () => recruiterStats.slice(0, 6).map(r => ({
+      name: r.fullName.split(' ')[0],
+      submissions: r.submissions,
+      selected: r.selected,
+      rejected: r.rejected
+    })),
     [recruiterStats]
   );
 
@@ -266,18 +271,40 @@ export default function AdminDashboard() {
     <div className="max-w-[1600px] mx-auto space-y-8 relative">
 
       {/* ── Header ── */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 bg-white/50 p-6 rounded-2xl border border-gray-100 shadow-sm">
         <div>
-          <h1 className="text-3xl font-bold text-[#283086]">Admin Dashboard</h1>
+          <h1 className="text-3xl font-bold text-[#283086] tracking-tight">Admin Dashboard</h1>
           <p className="text-gray-500 text-sm font-medium mt-1">
-            Welcome back {currentUser?.firstName || 'Admin'}, Have a nice day..!
+            Welcome back <span className="text-[#283086] font-bold">{currentUser?.firstName || 'Admin'}</span>, Have a nice day..!
           </p>
         </div>
-        <div className="flex items-center gap-2 text-xs font-bold text-gray-500 bg-white px-4 py-2 rounded-lg shadow-sm">
-          <span>{formattedDate}</span>
-          <span className="relative flex h-3 w-3">
-            <span className="relative inline-flex rounded-full h-3 w-3 bg-purple-500" />
-          </span>
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Top Level Recruiter Filter */}
+          <div className="relative group">
+            <select
+              value={recruiterFilter}
+              onChange={(e) => setRecruiterFilter(e.target.value)}
+              className="pl-4 pr-10 py-2.5 text-xs font-bold uppercase tracking-wider border border-gray-200 rounded-xl text-[#283086] focus:ring-4 focus:ring-blue-100 focus:outline-none bg-white appearance-none cursor-pointer shadow-sm transition-all hover:border-[#283086]"
+            >
+              {RECRUITER_NAMES.map(name => (
+                <option key={name} value={name}>{name === 'All' ? '🗂️ All Recruiters' : `👤 ${name}`}</option>
+              ))}
+            </select>
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400 group-hover:text-[#283086] transition-colors">
+              <Plus size={14} className="rotate-45" />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.1em] text-gray-400 bg-white border border-gray-100 px-5 py-2.5 rounded-xl shadow-sm">
+            <span className="flex items-center gap-2 px-2 border-r border-gray-100 mr-2">
+               <Calendar size={12} className="text-[#283086]" />
+               {formattedDate}
+            </span>
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-[#283086]" />
+            </span>
+          </div>
         </div>
       </div>
 
@@ -331,16 +358,19 @@ export default function AdminDashboard() {
           <h3 className="text-base font-bold text-slate-800">Top Recruiters (Upload Report)</h3>
           <span className="text-xs text-gray-400">showing {Math.min(6, recruiters.length)} of {recruiters.length}</span>
         </div>
-        <div className="h-72">
+        <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={barData} barSize={40}>
+            <BarChart data={barData} barSize={35} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
               <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12, fontWeight: 500 }} dy={10} />
-              <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} tickFormatter={v => `${v}`} />
-              <Tooltip cursor={{ fill: 'transparent' }} />
-              <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-                {barData.map((_, i) => <Cell key={`cell-${i}`} fill="#5664d2" />)}
-              </Bar>
+              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 11, fontWeight: 700 }} dy={10} />
+              <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={v => `${v}`} />
+              <Tooltip 
+                cursor={{ fill: '#f8fafc', radius: 8 }}
+                contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', padding: '12px' }}
+              />
+              <Bar dataKey="submissions" name="Total" fill="#5664d2" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="selected" name="Selected" fill="#10b981" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="rejected" name="Rejected" fill="#f43f5e" radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>

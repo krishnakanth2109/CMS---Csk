@@ -119,6 +119,7 @@ export default function AdminRecruiters() {
       const recruiterData = await rr.json();
       const candidateData = await rc.json();
 
+      // FIXED: Filter only "recruiter" and "admin" (removed "manager")
       const allUsers = recruiterData
         .filter((user) => ['recruiter', 'admin'].includes(user.role))
         .map((r) => ({ ...r, id: r._id }));
@@ -321,7 +322,6 @@ export default function AdminRecruiters() {
   };
 
   // ── Pre-computed stats map — runs ONCE when candidates change, not on every sort ──
-  // Old calcStats was called inside .sort() = O(n²) candidate scans per render
   const statsMap = useMemo(() => {
     const map = {};
     candidates.forEach(c => {
@@ -393,8 +393,6 @@ export default function AdminRecruiters() {
   }, [candidates, selectedRecruiter, candidateFilterType]);
 
   // ── Summary stats ─────────────────────────────────────────────────────────
-  // isActive: true when active===true OR active===undefined/null (legacy docs)
-  // isInactive: ONLY when active is explicitly false (boolean false or string 'false')
   const isActive   = (r) => r.active !== false && r.active !== 'false';
   const isInactive = (r) => r.active === false  || r.active === 'false';
 
@@ -498,7 +496,7 @@ export default function AdminRecruiters() {
             <h1 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-white">
               Users Management
             </h1>
-            <p className="text-gray-500 mt-1">Manage Admins, Managers, and Recruiters</p>
+            <p className="text-gray-500 mt-1">Manage Admins and Recruiters</p>
           </div>
           <Button
             onClick={() => { setShowModal(true); setErrors({}); setNewRecruiter(EMPTY_RECRUITER); }}
@@ -830,7 +828,6 @@ export default function AdminRecruiters() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="recruiter">Recruiter</SelectItem>
-                        <SelectItem value="manager">Manager</SelectItem>
                         <SelectItem value="admin">Admin</SelectItem>
                       </SelectContent>
                     </Select>
@@ -941,7 +938,6 @@ export default function AdminRecruiters() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="recruiter">Recruiter</SelectItem>
-                        <SelectItem value="manager">Manager</SelectItem>
                         <SelectItem value="admin">Admin</SelectItem>
                       </SelectContent>
                     </Select>
