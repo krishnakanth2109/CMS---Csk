@@ -31,7 +31,7 @@ import agreementLetterRoutes  from './routes/agreementLetterRoutes.js';
 import agreementEmailRoutes   from './routes/agreementEmailRoutes.js';
 import agreementUploadRoutes  from './routes/agreementUploadRoutes.js';
 
-// ── __dirname shim for ES Modules ─────────────────────────────────────────────
+// ── __dirname shim for ES Modules ────────────────────────────────────────────
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
 
@@ -41,7 +41,7 @@ if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 const app        = express();
 const httpServer = createServer(app);
 
-const FRONTEND_URL = (process.env.FRONTEND_URL || 'http://localhost:5174').trim().replace(/\/$/, '');
+const FRONTEND_URL = (process.env.FRONTEND_URL || 'http://localhost:5173').trim().replace(/\/$/, '');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FIX: Use configured FRONTEND_URL and avoid collisions with other local projects.
@@ -49,14 +49,8 @@ const FRONTEND_URL = (process.env.FRONTEND_URL || 'http://localhost:5174').trim(
 const ALLOWED_ORIGINS = [
   FRONTEND_URL,
   'http://localhost:5173',
-  'http://127.0.0.1:5173',
-  'http://localhost:5174',
-  'http://127.0.0.1:5174',
   'https://vagarious-cms.netlify.app',
-  'https://cms-vagarious.netlify.app',
   'http://localhost:5000',
-  'http://localhost:8080',
-  'http://127.0.0.1:8080',
 ];
 
 // ── Socket.IO ──────────────────────────────────────────────────────────────────
@@ -207,7 +201,9 @@ app.use('/',           aiMockRoutes);
 app.get('/', (_req, res) => {
   res.json({ message: 'API is running with Socket.IO & File Uploads...' });
 });
-
+app.get('/ass', (_req, res) => {
+  res.json({ message: 'Mind your head' });
+});
 // ═══════════════════════════════════════════════════════════════════════════════
 // GET /api/reports  — Admin & Manager dashboard
 // FIX: status is stored as an ARRAY — use hasStatus() for all checks
