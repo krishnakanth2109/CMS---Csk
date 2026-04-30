@@ -17,6 +17,21 @@ if (!admin.apps.length) {
 export { admin };
 
 /**
+ * getTenantOwnerId — canonical helper used across ALL controllers.
+ *
+ * Rules:
+ *   master   → null  (global, bypasses all tenant filters)
+ *   manager  → user._id  (they ARE the tenant root)
+ *   admin    → user.tenantOwnerId  (points to their manager)
+ *   recruiter→ user.tenantOwnerId  (points to their manager)
+ */
+export const getTenantOwnerId = (user) => {
+  if (user.role === 'master')  return null;
+  if (user.role === 'manager') return user._id;
+  return user.tenantOwnerId;
+};
+
+/**
  * protect — verifies Firebase ID token from the Authorization header.
  */
 export const protect = async (req, res, next) => {
@@ -55,7 +70,12 @@ export const protect = async (req, res, next) => {
       return res.status(401).json({ message: 'Account deactivated. Contact Admin.' });
     }
 
+    // Resolve tenantId
+    const tenantId = getTenantOwnerId(user);
+
     req.user = user;
+    req.tenantId = tenantId;
+
     next();
   } catch (error) {
     if (error.code === 'auth/id-token-expired') {

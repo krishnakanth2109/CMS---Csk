@@ -449,11 +449,38 @@ const AdminClientInvoice = () => {
 
       currentY += tH * 2;
 
-      const footerY = currentY + (isLargeList ? 25 : 40);
+      const footerY = currentY + (isLargeList ? 20 : 30);
       drawText("In Words : ", 68, footerY, 10, true);
-      drawText(numberToWords(grandTotalAmt).toUpperCase(), 125, footerY, isLargeList ? 8.5 : 9.5);
+      
+      const wordsString = numberToWords(grandTotalAmt).toUpperCase();
+      const maxWordsWidth = width - 125 - 68; // Matching left margin for right margin
+      const wordsFontSize = isLargeList ? 8.5 : 9.5;
+      
+      // Multi-line wrapping logic for 'In Words'
+      let wordsLines = [];
+      let currentWordLine = "";
+      const wordsArray = wordsString.split(" ");
+      
+      wordsArray.forEach(word => {
+        const testLine = currentWordLine ? currentWordLine + " " + word : word;
+        const testWidth = helvetica.widthOfTextAtSize(testLine, wordsFontSize);
+        if (testWidth > maxWordsWidth && currentWordLine) {
+          wordsLines.push(currentWordLine);
+          currentWordLine = word;
+        } else {
+          currentWordLine = testLine;
+        }
+      });
+      wordsLines.push(currentWordLine);
 
-      const accY = footerY + (isLargeList ? 35 : 50);
+      wordsLines.forEach((line, idx) => {
+        drawText(line, 125, footerY + (idx * (wordsFontSize + 2)), wordsFontSize);
+      });
+
+      const wordsEndY = footerY + ((wordsLines.length - 1) * (wordsFontSize + 2));
+      const accY = wordsEndY + (isLargeList ? 35 : 45);
+      let lastContentY = accY;
+
       if (form.accountType !== "no") {
         drawText("Account Details: -", 68, accY - (isLargeList ? 14 : 18), isLargeList ? 10 : 11, true);
         const details = [
@@ -468,11 +495,11 @@ const AdminClientInvoice = () => {
         details.forEach((line, idx) => {
           drawText(line, 68, accY + (idx * accSpacing), accFs, true);
         });
+        lastContentY = accY + (6 * accSpacing);
       }
 
-      // -- Signature Block (Left Aligned) -- (Request 2: Added more space for stamp/sig)
-      const sigOffset = form.accountType !== "no" ? (accSpacing * 10) + 80 : 110;
-      const sigY = accY + sigOffset;
+      // -- Signature Block (Left Aligned) -- (Adjusted to avoid bottom overlap)
+      const sigY = lastContentY + (isLargeList ? 45 : 60); // Gap for manual signature
       drawText("Navya S", 68, sigY, 11, true);
       drawText("Vagarious Solutions Pvt Ltd", 68, sigY + 16, 11, true);
 
@@ -867,7 +894,7 @@ const AdminClientInvoice = () => {
           makeText("In Words : ", { size: 9, bold: true }),
           makeText(wordsString, { size: wordsFontSize, bold: false }),
         ],
-        spacing: { before: ptToTwip(12), after: ptToTwip(15) },
+        spacing: { before: ptToTwip(8), after: ptToTwip(20) },
       }));
 
       if (form.accountType !== "no") {
@@ -889,7 +916,7 @@ const AdminClientInvoice = () => {
       }
 
       // Request 2: More space for signature/stamp
-      children.push(new DocxParagraph({ children: [], spacing: { after: ptToTwip(60) } }));
+      children.push(new DocxParagraph({ children: [], spacing: { after: ptToTwip(45) } }));
       children.push(makeParagraph("Navya S", { size: 10, bold: true, spaceAfter: 1 }));
       children.push(makeParagraph("Vagarious Solutions Pvt Ltd", { size: 10, bold: true, spaceAfter: 0 }));
 

@@ -58,9 +58,18 @@ const userSchema = new mongoose.Schema(
     // Updated: Nainika = admin, Sanjay/Navya/Krishna = manager
     role: {
       type: String,
-      enum: ['admin', 'manager', 'recruiter'],
+      enum: ['master', 'admin', 'manager', 'recruiter'],
       default: 'recruiter',
     },
+
+    // ── SaaS Multi-Tenancy Root ───────────────────────────────────────────────
+    tenantOwnerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+
+    companyName: { type: String, trim: true },
 
     // 🔹 Account Status
     active: {

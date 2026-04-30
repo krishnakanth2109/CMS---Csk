@@ -33,7 +33,8 @@ async function apiFetch(path, options = {}) {
     });
     if (!res.ok) {
       console.error(`[API Error] Status: ${res.status} | Path: ${path}`);
-      throw new Error(`HTTP ${res.status}: ${res.statusText || 'Request failed'}`);
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.detail || errorData.message || `HTTP ${res.status}: ${res.statusText || 'Request failed'}`);
     }
     return res.json();
   } catch (err) {
@@ -54,6 +55,10 @@ export default function MockInterviewsDashboard() {
   const [selectedSessionId, setSelectedSessionId] = useState(null);
   const [sessionResults, setSessionResults] = useState(null);
   const [resultsLoading, setResultsLoading] = useState(false);
+  const [appliedSearch, setAppliedSearch] = useState('');
+  const [sortOrder, setSortOrder] = useState('newest'); // 'newest' or 'score'
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
 
   const handleDownloadPDF = async () => {
     let noPrintElements = [];
@@ -101,26 +106,25 @@ export default function MockInterviewsDashboard() {
         backgroundColor: '#ffffff'
       });
 
-      const imgData = canvas.toDataURL('image/jpeg', 1.0);
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new window.jspdf.jsPDF('p', 'mm', 'a4');
+      
+      const imgWidth = 210; // A4 width in mm
+      const pageHeight = 297; // A4 height in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      let heightLeft = imgHeight;
+      let position = 0;
 
-      // Calculate true dimensions (reverting the 2x scale for sharp density)
-      const contentWidth = canvas.width / 2;
-      const contentHeight = canvas.height / 2;
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
 
-      // Add gorgeous 40px padding to all four sides
-      const padding = 40;
-      const pdfWidth = contentWidth + (padding * 2);
-      const pdfHeight = contentHeight + (padding * 2);
+      while (heightLeft >= 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
 
-      // Force PDF library to use EXACT, continuous physical sizing.
-      const pdf = new window.jspdf.jsPDF({
-        orientation: pdfWidth > pdfHeight ? 'landscape' : 'portrait',
-        unit: 'px',
-        format: [pdfWidth, pdfHeight]
-      });
-
-      // Draw the image onto the custom page with exactly the padding offset applied
-      pdf.addImage(imgData, 'JPEG', padding, padding, contentWidth, contentHeight);
       pdf.save(`Interview_Report_${sessionResults?.candidate_name?.replace(/\s+/g, '_') || 'Candidate'}.pdf`);
 
     } catch (error) {
@@ -139,15 +143,40 @@ export default function MockInterviewsDashboard() {
 
   const [jobDescription, setJobDescription] = useState('');
   const [duration, setDuration] = useState('30');
-  const [recordVideo, setRecordVideo] = useState(false); // Issue 3
-  const [creationMode, setCreationMode] = useState('single'); // Issue 1: single or bulk
-  const [bulkCandidates, setBulkCandidates] = useState([]); // Issue 1: list from excel
+  const [recordVideo, setRecordVideo] = useState(false);
+  const [creationMode, setCreationMode] = useState('single');
+  const [bulkCandidates, setBulkCandidates] = useState([]);
+  const [manualName, setManualName] = useState('');
+  const [manualEmail, setManualEmail] = useState('');
+  const [isBulkDispatching, setIsBulkDispatching] = useState(false);
+  const [parsedResumeText, setParsedResumeText] = useState('');
+  const [showEmailPreview, setShowEmailPreview] = useState(false);
+  const [emailPreviewContent, setEmailPreviewContent] = useState('');
+  const [showDeactivatedPanel, setShowDeactivatedPanel] = useState(false);
+
+  const setRecordVideoForMode = (enabled) => {
+    setRecordVideo(enabled);
+    if (creationMode === 'bulk') {
+      setBulkCandidates(prev => prev.map(candidate => ({
+        ...candidate,
+        record_video: enabled
+      })));
+    }
+  };
+
+  const deactivatedSessions = useMemo(() => {
+    return (sessions || []).filter(s => s.isActive === false);
+  }, [sessions]);
 
   // Default to current local time for scheduling
   const initialDate = new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
   const initialTime = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
   const [scheduledDate, setScheduledDate] = useState(initialDate);
   const [scheduledTime, setScheduledTime] = useState(initialTime);
+
+  // Deadline date: default to 3 days from now
+  const defaultDeadline = new Date(new Date().getTime() + 3 * 24 * 60 * 60 * 1000 - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  const [deadlineDate, setDeadlineDate] = useState(defaultDeadline);
 
   const [resumeFile, setResumeFile] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -163,7 +192,6 @@ export default function MockInterviewsDashboard() {
   const [endDate, setEndDate] = useState('');
   const role = String(userRole || '').toLowerCase();
   const adminId = (role === 'admin' || role === 'manager') ? 'all' : (currentUser?._id || currentUser?.id || 'admin_user');
-
 
   const openResults = async (linkId) => {
     setResultsLoading(true);
@@ -247,7 +275,6 @@ export default function MockInterviewsDashboard() {
     }
   };
 
-  // Issue 1: Excel Import Logic
   const handleExcelImport = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -261,11 +288,11 @@ export default function MockInterviewsDashboard() {
         const ws = wb.Sheets[wsname];
         const data = XLSX.utils.sheet_to_json(ws);
         
-        // Map columns (loose match)
         const mapped = data.map(row => ({
           name: row.Name || row.name || row['Candidate Name'] || row.FullName || '',
           email: row.Email || row.email || row['Email ID'] || row.EmailAddress || '',
-          resume_text: row.ResumeText || '', // Optional individual resume text
+          resume_text: row.ResumeText || '',
+          record_video: recordVideo
         })).filter(c => c.name && c.email);
 
         setBulkCandidates(mapped);
@@ -277,7 +304,6 @@ export default function MockInterviewsDashboard() {
     reader.readAsBinaryString(file);
   };
 
-  // Issue 1: Download Template
   const downloadTemplate = () => {
     const templateData = [
       { "Name": "John Doe", "Email": "john@example.com" },
@@ -292,7 +318,7 @@ export default function MockInterviewsDashboard() {
   const [isUpdatingDecision, setIsUpdatingDecision] = useState(false);
 
   const handleDecision = async (linkId, decision) => {
-    if (isUpdatingDecision) return; // Prevent double clicks strictly
+    if (isUpdatingDecision) return;
 
     if (!window.confirm(`Are you sure you want to mark this candidate as ${decision}? This will lock the decision and the action cannot be undone.`)) {
       return;
@@ -311,14 +337,19 @@ export default function MockInterviewsDashboard() {
       });
 
       if (data.status === 'success') {
-        toast({ title: 'Decision Saved', description: `Candidate status permanently updated to ${decision}. Email status: ${data.email_sent ? 'Sent' : 'Failed'}` });
+        const savedDecision = data.decision === 'selected' ? 'Accepted' : 'Rejected';
+        toast({
+          title: data.email_sent ? `${savedDecision} Mail Sent` : `${savedDecision} Saved, Mail Failed`,
+          description: data.email_sent
+            ? `Decision mail sent to this candidate.`
+            : (data.email_reason || 'Decision was saved, but the email provider did not send the mail.'),
+          variant: data.email_sent ? undefined : 'destructive'
+        });
 
-        // INSTANTLY update the UI state so buttons vanish immediately
         if (activeTab === 'results') {
-          setSessionResults(prev => prev ? { ...prev, decision: decision } : prev);
+          setSessionResults(prev => prev ? { ...prev, decision: data.decision || decision } : prev);
         }
 
-        // Refresh the backend data in the background silently
         fetchSessions();
       } else {
         throw new Error(data.detail || 'Update failed');
@@ -338,8 +369,8 @@ export default function MockInterviewsDashboard() {
       return;
     }
 
-    if (creationMode === 'single' && !candidateName) {
-      toast({ title: 'Validation Error', description: 'Candidate name is required.', variant: 'destructive' });
+    if (creationMode === 'single' && (!candidateName || !candidateEmail)) {
+      toast({ title: 'Validation Error', description: 'Both candidate name and email are required.', variant: 'destructive' });
       return;
     }
 
@@ -349,9 +380,10 @@ export default function MockInterviewsDashboard() {
     }
 
     setIsSubmitting(true);
-    let parsedGlobalResumeText = '';
     
     try {
+      let finalResumeText = parsedResumeText;
+
       if (resumeFile) {
         const formData = new FormData();
         formData.append('file', resumeFile);
@@ -363,7 +395,8 @@ export default function MockInterviewsDashboard() {
         });
         if (!uploadRes.ok) throw new Error('Failed to parse file');
         const uploadData = await uploadRes.json();
-        parsedGlobalResumeText = uploadData.text;
+        finalResumeText = uploadData.text;
+        setParsedResumeText(finalResumeText);
 
         if (creationMode === 'single') {
           if (!candidateName && uploadData.name) setCandidateName(uploadData.name);
@@ -371,25 +404,65 @@ export default function MockInterviewsDashboard() {
         }
       }
 
+      const cleanBody = `Dear {name},
+
+We are excited to invite you to complete an AI-powered technical interview. This assessment will help us understand your skills and experience better.
+
+Important: A PDF reference is attached for your review.
+Interview Duration: ${duration} minutes
+
+Please click the button below to start your session:
+{link}
+
+Best of luck!
+Arah Recruitment Team`;
+
+      setEmailPreviewContent(cleanBody);
+      setShowEmailPreview(true);
+
+    } catch (error) {
+      toast({ title: 'Failed', description: error.message, variant: 'destructive' });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const confirmDispatch = async () => {
+    setIsBulkDispatching(true);
+    try {
       if (creationMode === 'bulk') {
-        // Issue 1: Bulk creation
         const data = await apiFetch('/admin/bulk-create-sessions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            candidates: bulkCandidates,
+            candidates: bulkCandidates.map(candidate => ({
+              ...candidate,
+              record_video: candidate.record_video === true || candidate.record_video === 'true'
+            })),
             global_job_description: jobDescription || 'JD provided via attached file',
-            global_resume_text: parsedGlobalResumeText,
+            global_resume_text: parsedResumeText,
             admin_id: currentUser?._id || currentUser?.id || 'admin_user',
             admin_name: currentUser?.name || 'Admin',
             interview_duration: parseInt(duration),
             record_video: recordVideo,
-            scheduled_time: `${scheduledDate}T${scheduledTime}:00`
+            scheduled_time: `${scheduledDate}T${scheduledTime}:00`,
+            deadline_date: deadlineDate,
+            customBody: emailPreviewContent
           })
         });
 
         if (data.status === 'success') {
-          toast({ title: 'Bulk Success', description: `Dispatched ${data.processed} interview invites.` });
+          toast({ title: 'Bulk Success', description: `Dispatched ${data.sent || data.processed} interview invite emails to candidates.` });
+        } else if (data.status === 'partial') {
+          toast({
+            title: 'Some Emails Failed',
+            description: `${data.sent || 0} sent, ${data.failed || 0} failed. Check backend logs for Brevo rejection details.`,
+            variant: 'destructive'
+          });
+          if ((data.sent || 0) === 0) throw new Error('No invitation emails were sent.');
+        }
+
+        if (data.status === 'success' || data.status === 'partial') {
           setBulkCandidates([]);
           setActiveTab('overview');
           fetchSessions();
@@ -397,7 +470,6 @@ export default function MockInterviewsDashboard() {
           throw new Error(data.detail || 'Bulk creation failed');
         }
       } else {
-        // Single creation
         const data = await apiFetch('/admin/create-session', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -408,29 +480,33 @@ export default function MockInterviewsDashboard() {
             admin_id: currentUser?._id || currentUser?.id || 'admin_user',
             admin_name: currentUser?.name || 'Admin',
             interview_duration: parseInt(duration),
-            resume_text: parsedGlobalResumeText,
-            record_video: recordVideo, // Issue 3
-            scheduled_time: `${scheduledDate}T${scheduledTime}:00`
+            resume_text: parsedResumeText,
+            record_video: recordVideo,
+            scheduled_time: `${scheduledDate}T${scheduledTime}:00`,
+            deadline_date: deadlineDate,
+            customBody: emailPreviewContent
           })
         });
 
         if (data.status === 'success') {
-          toast({ title: 'Success', description: 'Interview link created successfully.' });
+          toast({ title: 'Interview Link Dispatched', description: `Invite mail sent to ${candidateEmail}.` });
           setCandidateName('');
           setCandidateEmail('');
           setJobDescription('');
           setDuration('30');
           setResumeFile(null);
+          setParsedResumeText('');
           setActiveTab('overview');
           fetchSessions();
         } else {
           throw new Error(data.detail || 'Creation failed');
         }
       }
+      setShowEmailPreview(false);
     } catch (error) {
-      toast({ title: 'Failed', description: error.message, variant: 'destructive' });
+      toast({ title: 'Dispatch Failed', description: error.message, variant: 'destructive' });
     } finally {
-      setIsSubmitting(false);
+      setIsBulkDispatching(false);
     }
   };
 
@@ -497,32 +573,134 @@ export default function MockInterviewsDashboard() {
 
   const filteredSessions = useMemo(() => {
     const safeSessions = Array.isArray(sessions) ? sessions : [];
-    let filtered = safeSessions;
+    let filtered = safeSessions.filter(s => s.isActive !== false);
 
-    // Filter by name
-    if (searchQuery) {
+    if (appliedSearch) {
       filtered = filtered.filter(s =>
-        s?.candidate_name?.toLowerCase().includes(searchQuery.toLowerCase())
+        s?.candidate_name?.toLowerCase().includes(appliedSearch.toLowerCase())
       );
     }
 
-    // Filter by recruiter
     if (selectedRecruiterId !== 'all') {
       filtered = filtered.filter(s => s?.created_by === selectedRecruiterId);
     }
 
-    // Filter by tab
     if (activeTab === 'qualified') {
       filtered = filtered.filter(s => s?.decision?.toLowerCase() === 'selected');
     } else if (activeTab === 'rejected_tab') {
       filtered = filtered.filter(s => s?.decision?.toLowerCase() === 'rejected');
     }
 
+    if (sortOrder === 'score') {
+      filtered.sort((a, b) => (b.avg_score || 0) - (a.avg_score || 0));
+    } else {
+      filtered.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    }
+
     return filtered;
-  }, [sessions, searchQuery, selectedRecruiterId, activeTab]);
+  }, [sessions, appliedSearch, selectedRecruiterId, activeTab, sortOrder]);
+
+  const paginatedSessions = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredSessions.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredSessions, currentPage]);
+
+  const handleExportExcel = () => {
+    const dataToExport = filteredSessions.map(s => ({
+      'Candidate Name': s.candidate_name,
+      'Email': s.candidate_email || 'N/A',
+      'Score': Math.round(s.avg_score || 0),
+      'Status': s.status,
+      'Decision': s.decision || 'Pending',
+      'Recruiter': s.created_by_name || 'N/A',
+      'Date': new Date(s.created_at).toLocaleString()
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Candidates");
+    XLSX.writeFile(workbook, `Candidate_List_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
+  const toggleCandidateStatus = async (link_id, currentStatus) => {
+    try {
+      const newStatus = !currentStatus;
+      await apiFetch('/admin/toggle-candidate-status', {
+        method: 'POST',
+        body: JSON.stringify({ link_id, isActive: newStatus })
+      });
+      setSessions(prev => prev.map(s => s.link_id === link_id ? { ...s, isActive: newStatus } : s));
+      toast({ title: 'Status Updated', description: `Candidate ${newStatus ? 'activated' : 'deactivated'} successfully.` });
+    } catch (err) {
+      toast({ title: 'Error', description: 'Failed to update status', variant: 'destructive' });
+    }
+  };
 
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 relative">
+
+      {showDeactivatedPanel && (
+        <div className="fixed inset-0 z-[90] flex justify-end">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowDeactivatedPanel(false)} />
+          <div className="relative w-full max-w-md bg-white shadow-2xl animate-in slide-in-from-right duration-300 flex flex-col">
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gradient-to-r from-slate-50 to-white">
+              <div>
+                <h2 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-rose-500" />
+                  Deactivated Candidates
+                </h2>
+                <p className="text-xs text-slate-400 font-medium mt-0.5">{deactivatedSessions.length} candidate{deactivatedSessions.length !== 1 ? 's' : ''} deactivated</p>
+              </div>
+              <button onClick={() => setShowDeactivatedPanel(false)} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+                <X className="w-5 h-5 text-slate-400" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {deactivatedSessions.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-64 text-center">
+                  <div className="p-4 bg-emerald-50 rounded-full mb-4">
+                    <CheckCircle2 className="w-10 h-10 text-emerald-300" />
+                  </div>
+                  <h3 className="text-sm font-bold text-slate-700">All candidates are active</h3>
+                  <p className="text-xs text-slate-400 mt-1">No deactivated candidates to show.</p>
+                </div>
+              ) : (
+                deactivatedSessions.map(s => (
+                  <div key={s.link_id} className="bg-slate-50 border border-gray-100 rounded-2xl p-4 flex items-center justify-between gap-3 hover:bg-white hover:shadow-sm transition-all group">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-9 h-9 bg-rose-50 rounded-full flex items-center justify-center text-rose-500 text-xs font-black border border-rose-100 shrink-0">
+                        {s.candidate_name?.charAt(0)?.toUpperCase() || '?'}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-black text-slate-800 truncate">{s.candidate_name}</p>
+                        <p className="text-[10px] text-slate-400 font-medium truncate">{s.candidate_email || 'No email'}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded ${
+                            s.status === 'completed' ? 'bg-emerald-50 text-emerald-600' :
+                            s.status === 'started' ? 'bg-amber-50 text-amber-600' :
+                            'bg-slate-100 text-slate-400'
+                          }`}>{s.status}</span>
+                          {s.avg_score > 0 && (
+                            <span className="text-[9px] font-black text-indigo-500">{Math.round(s.avg_score)}%</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => toggleCandidateStatus(s.link_id, s.isActive)}
+                      className="shrink-0 bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider shadow-md hover:shadow-lg transition-all active:scale-95"
+                    >
+                      Activate
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-4xl font-black text-[#584ED3] tracking-tight">AI Interview Dashboard</h1>
@@ -530,11 +708,30 @@ export default function MockInterviewsDashboard() {
         </div>
         <div className="flex items-center gap-3">
           <button
+            onClick={() => setShowDeactivatedPanel(true)}
+            className="relative bg-white border border-gray-200 text-slate-700 px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-sm hover:bg-slate-50 transition-all text-sm"
+          >
+            <Shield className="w-4 h-4 text-slate-400" />
+            Deactivated
+            {deactivatedSessions.length > 0 && (
+              <span className="absolute -top-2 -right-2 bg-rose-500 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center shadow-md">
+                {deactivatedSessions.length}
+              </span>
+            )}
+          </button>
+          <button
             onClick={fetchSessions}
             className="bg-white border border-gray-200 text-slate-700 px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-sm hover:bg-slate-50 transition-all text-sm"
           >
             <RotateCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
+          </button>
+          <button
+            onClick={handleExportExcel}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-lg transition-all text-sm"
+          >
+            <Download className="w-4 h-4" />
+            Export Excel
           </button>
           <button
             onClick={() => setActiveTab('create')}
@@ -568,6 +765,92 @@ export default function MockInterviewsDashboard() {
 
       <div id="dashboard-container" className="bg-white rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden relative min-h-[500px]">
         <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50 rounded-full blur-3xl opacity-50 -mr-20 -mt-20 pointer-events-none" />
+
+        {showEmailPreview && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowEmailPreview(false)} />
+            <div className="relative bg-white w-full max-w-5xl rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+              <div className="p-8 border-b border-gray-100 flex justify-between items-center">
+                <div>
+                  <h2 className="text-2xl font-black text-slate-800">Review Invitation Template</h2>
+                  <p className="text-slate-400 text-sm font-medium mt-1">This email will be sent to {creationMode === 'single' ? candidateName : `${bulkCandidates.length} candidates`}.</p>
+                </div>
+                <button onClick={() => setShowEmailPreview(false)} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+                  <X className="w-6 h-6 text-slate-400" />
+                </button>
+              </div>
+              
+              <div className="grid grid-cols-1 lg:grid-cols-2 h-[500px]">
+                <div className="p-8 bg-slate-50 overflow-y-auto border-r border-gray-100">
+                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+                    <div className="border-b border-gray-100 pb-4 mb-4">
+                       <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Subject</p>
+                       <p className="text-sm font-bold text-slate-800">Interview Invitation - Arah Info Tech</p>
+                    </div>
+                    <div className="space-y-4">
+                      <div className="border border-slate-100 rounded-xl overflow-hidden shadow-sm">
+                        <div className="bg-[#6366f1] p-4 text-center">
+                          <h1 className="text-white font-bold text-sm m-0">Interview Invitation</h1>
+                        </div>
+                        <div className="p-6 text-sm text-slate-700 leading-relaxed">
+                          {emailPreviewContent.split('\n').map((line, i) => (
+                             <p key={i} className="mb-3 last:mb-0">
+                               {line.includes('{name}') ? (
+                                 <span>Dear <b className="text-indigo-600">{creationMode === 'single' ? (candidateName || 'Candidate') : 'Candidate Name'}</b>,</span>
+                               ) : line.includes('{link}') ? (
+                                 <div className="text-center my-6">
+                                   <button className="bg-[#6366f1] text-white px-6 py-2.5 rounded-lg font-bold shadow-md pointer-events-none">
+                                     🚀 Start Interview Now
+                                   </button>
+                                   <p className="text-[10px] text-slate-400 mt-2">Example Link: http://cms.arah.in/invite?id=...</p>
+                                 </div>
+                               ) : (
+                                 line
+                               )}
+                             </p>
+                          ))}
+                        </div>
+                        <div className="bg-slate-50 p-3 text-center border-t border-slate-100">
+                          <p className="text-[9px] text-slate-400 m-0">© {new Date().getFullYear()} Arah Info Tech. All rights reserved.</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-8 bg-white flex flex-col">
+                   <div className="flex justify-between items-center mb-3">
+                     <label className="text-xs font-black text-indigo-500 uppercase tracking-widest block">Message Editor</label>
+                     <span className="text-[10px] font-bold text-amber-500 px-2 py-0.5 bg-amber-50 rounded italic">LIVE PREVIEW</span>
+                   </div>
+                   <textarea 
+                     value={emailPreviewContent} 
+                     onChange={e => setEmailPreviewContent(e.target.value)}
+                     placeholder="Type your invitation message here..."
+                     className="flex-1 w-full p-6 bg-slate-50 border border-gray-100 rounded-2xl text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none resize-none transition-all leading-relaxed"
+                   />
+                   <div className="mt-4 p-3 bg-indigo-50 rounded-xl border border-indigo-100">
+                      <p className="text-[10px] text-indigo-600 font-bold leading-relaxed italic">
+                        💡 Use <code className="bg-white px-1 rounded border border-indigo-200">{"{name}"}</code> for candidate name and <code className="bg-white px-1 rounded border border-indigo-200">{"{link}"}</code> for the interview button.
+                      </p>
+                   </div>
+                </div>
+              </div>
+
+              <div className="p-8 bg-slate-50 border-t border-gray-100 flex justify-end gap-3">
+                 <button onClick={() => setShowEmailPreview(false)} className="px-6 py-2.5 font-bold text-slate-500 hover:text-slate-700 transition-colors">Cancel</button>
+                 <button 
+                   onClick={confirmDispatch} 
+                   disabled={isBulkDispatching}
+                   className="bg-[#584ED3] hover:bg-indigo-700 text-white px-8 py-2.5 rounded-xl font-bold shadow-lg shadow-indigo-200 transition-all flex items-center gap-2"
+                 >
+                   {isBulkDispatching ? <RotateCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                   Confirm & Send Invites
+                 </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {activeTab === 'results' ? (
           <div className="p-8 relative z-10 animate-in fade-in slide-in-from-right-4 duration-300">
@@ -622,7 +905,6 @@ export default function MockInterviewsDashboard() {
                   </div>
                 </div>
 
-                {/* Score Summary */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="bg-white p-6 rounded-[1.5rem] border border-gray-200 shadow-sm flex flex-col justify-between hover:border-indigo-100 transition-colors pdf-avoid-break">
                     <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-4">Average Score</p>
@@ -652,7 +934,6 @@ export default function MockInterviewsDashboard() {
                   </div>
                 </div>
 
-                {/* Integrity Metrics */}
                 <div className="bg-slate-50 p-6 rounded-[1.5rem] border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-center gap-6 mt-2 pdf-avoid-break">
                   <div className="flex-1">
                     <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2">
@@ -677,7 +958,6 @@ export default function MockInterviewsDashboard() {
                   </div>
                 </div>
 
-                {/* Issue 3: Video Recording Player */}
                 {sessionResults.recording_url && (
                   <div className="bg-black rounded-[2rem] overflow-hidden shadow-2xl border-4 border-slate-900 group relative">
                     <video 
@@ -691,13 +971,12 @@ export default function MockInterviewsDashboard() {
                   </div>
                 )}
 
-                {/* Question Details */}
                 <div className="space-y-6">
                   <h3 className="text-xl font-black text-slate-800 px-2 flex items-center gap-2">
                     <Plus className="w-5 h-5 text-indigo-500" />
                     Response Breakdown
                   </h3>
-                  {sessionResults.answers.map((ans, idx) => (
+                  {(sessionResults.answers || []).map((ans, idx) => (
                     <div key={idx} className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm space-y-4 hover:border-indigo-100 transition-all">
                       <div className="flex justify-between items-start">
                         <div className="flex-1">
@@ -749,7 +1028,6 @@ export default function MockInterviewsDashboard() {
           </div>
         ) : activeTab !== 'create' ? (
           <div className="p-8 relative z-10 animate-in fade-in duration-300">
-            {/* Header with Stats */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
               <div className="bg-white p-6 rounded-[2rem] border border-gray-50 shadow-sm flex items-center justify-between group hover:border-indigo-100 transition-all">
                 <div>
@@ -781,7 +1059,7 @@ export default function MockInterviewsDashboard() {
                 </div>
               </div>
 
-              {userRole !== 'recruiter' && (
+              {(userRole === 'admin' || userRole === 'manager') && (
                 <div className="bg-white p-6 rounded-[2rem] border border-gray-50 shadow-sm flex flex-col justify-center gap-2 hover:border-indigo-50 transition-all">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ">Filter By Recruiter</p>
                   <div className="relative">
@@ -802,7 +1080,6 @@ export default function MockInterviewsDashboard() {
                 </div>
               )}
             </div>
-
 
             <div className="flex justify-between items-center mb-6 px-2">
               <div className="flex items-center gap-4">
@@ -835,15 +1112,36 @@ export default function MockInterviewsDashboard() {
                 </div>
               </div>
 
-              <div className="relative">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Filter candidates..."
-                  className="pl-11 pr-5 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm w-64 transition-all"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
+              <div className="flex items-center gap-3">
+                <div className="relative group">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
+                  <input
+                    type="text"
+                    placeholder="Candidate name..."
+                    className="pl-11 pr-5 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm w-56 transition-all"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && setAppliedSearch(searchQuery)}
+                  />
+                </div>
+                <button 
+                  onClick={() => { setAppliedSearch(searchQuery); setCurrentPage(1); }}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md transition-all active:scale-95"
+                >
+                  Search
+                </button>
+                
+                <div className="relative ml-2">
+                  <select
+                    value={sortOrder}
+                    onChange={(e) => { setSortOrder(e.target.value); setCurrentPage(1); }}
+                    className="pl-4 pr-10 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm appearance-none cursor-pointer min-w-[160px]"
+                  >
+                    <option value="newest">Recently Added</option>
+                    <option value="score">Top Scored</option>
+                  </select>
+                  <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                </div>
               </div>
 
               {selectedSessions.length > 0 && (
@@ -863,7 +1161,7 @@ export default function MockInterviewsDashboard() {
                 <div className="w-12 h-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
                 <p className="text-sm font-medium text-gray-400">Loading sessions...</p>
               </div>
-            ) : filteredSessions.length === 0 ? (
+            ) : (filteredSessions || []).length === 0 ? (
               <div className="flex flex-col h-64 items-center justify-center text-center">
                 <div className="p-6 bg-indigo-50 rounded-full mb-4">
                   <Cpu className="w-12 h-12 text-indigo-300" />
@@ -878,6 +1176,7 @@ export default function MockInterviewsDashboard() {
                 </button>
               </div>
             ) : (
+              <>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-slate-50 border-b border-gray-100 text-slate-500 uppercase font-bold text-[10px] tracking-wider">
@@ -896,18 +1195,19 @@ export default function MockInterviewsDashboard() {
                           }}
                         />
                       </th>
-                      <th className="px-6 py-8 text-left text-gray-400 font-bold text-[10px] uppercase tracking-widest bg-white">Candidate</th>
+                      <th className="px-6 py-8 text-left text-gray-400 font-bold text-[10px] uppercase tracking-widest bg-white whitespace-nowrap">Candidate</th>
                       {(userRole === 'admin' || userRole === 'manager') && (
-                        <th className="px-6 py-8 text-left text-gray-400 font-bold text-[10px] uppercase tracking-widest bg-white">Recruiter</th>
+                        <th className="px-6 py-8 text-left text-gray-400 font-bold text-[10px] uppercase tracking-widest bg-white whitespace-nowrap">Recruiter</th>
                       )}
-                      <th className="px-6 py-8 text-left text-gray-400 font-bold text-[10px] uppercase tracking-widest bg-white">Date Created</th>
-                      <th className="px-6 py-8 text-left text-gray-400 font-bold text-[10px] uppercase tracking-widest bg-white">Status</th>
-                      <th className="px-6 py-8 text-left text-gray-400 font-bold text-[10px] uppercase tracking-widest bg-white">Score</th>
-                      <th className="px-6 py-8 text-right text-gray-400 font-bold text-[10px] uppercase tracking-widest bg-white">Action</th>
+                      <th className="px-6 py-8 text-left text-gray-400 font-bold text-[10px] uppercase tracking-widest bg-white whitespace-nowrap">Date Created</th>
+                      <th className="px-6 py-8 text-left text-gray-400 font-bold text-[10px] uppercase tracking-widest bg-white whitespace-nowrap">Status</th>
+                      <th className="px-6 py-8 text-left text-gray-400 font-bold text-[10px] uppercase tracking-widest bg-white whitespace-nowrap">Active</th>
+                      <th className="px-6 py-8 text-left text-gray-400 font-bold text-[10px] uppercase tracking-widest bg-white whitespace-nowrap">Score</th>
+                      <th className="px-6 py-8 text-right text-gray-400 font-bold text-[10px] uppercase tracking-widest bg-white whitespace-nowrap">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
-                    {filteredSessions.map((s) => {
+                    {paginatedSessions.map((s) => {
                       const safeRecs = Array.isArray(recruiters) ? recruiters : [];
                       const rec = safeRecs.find(r => (r?._id || r?.id) === s?.created_by);
 
@@ -990,20 +1290,29 @@ export default function MockInterviewsDashboard() {
                                s.status === 'started' ? 'STARTED' : 'PENDING'}
                             </span>
                           </td>
-                          <td className="px-6 py-8 font-black text-base">
+                          <td className="px-6 py-6">
+                            <button
+                              onClick={() => toggleCandidateStatus(s.link_id, s.isActive)}
+                              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${s.isActive !== false ? 'bg-indigo-600' : 'bg-gray-200'}`}
+                            >
+                              <span
+                                className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${s.isActive !== false ? 'translate-x-[18px]' : 'translate-x-[4px]'}`}
+                              />
+                            </button>
+                          </td>
+                          <td className="px-6 py-8 font-black text-base whitespace-nowrap">
                             {s.status === 'completed' ? (
-                              <span className={s.avg_score >= 70 ? 'text-green-500' : 'text-rose-500'}>
-                                {Math.round(s.avg_score)}%
+                              <span className={`px-3 py-1 rounded-lg text-sm ${s.avg_score >= 60 ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : (s.avg_score > 0 ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'text-slate-300')}`}>
+                                {Math.round(s.avg_score || 0)}%
                               </span>
                             ) : (
-                              <span className="text-[#F43F5E]">N/A</span>
+                              <span className="text-slate-300 font-bold text-xs uppercase tracking-widest">N/A</span>
                             )}
                           </td>
                           <td className="px-6 py-6 text-right">
                             <div className="flex items-center justify-end gap-3">
                               {s.status === 'completed' ? (
                                 <div className="flex items-center gap-2">
-
                                   <button
                                     onClick={() => openResults(s.link_id)}
                                     className="bg-white border border-indigo-200 text-indigo-600 hover:bg-indigo-50 px-3 py-2 font-black text-[10px] uppercase rounded-lg transition-all shadow-sm"
@@ -1014,7 +1323,6 @@ export default function MockInterviewsDashboard() {
                               ) : (
                                 <button
                                   onClick={() => {
-                                    // Open the interview seamlessly within the CMS using our new route
                                     window.open(`${window.location.origin}/invite?session_id=${s.link_id}`);
                                   }}
                                   className="bg-white border border-gray-100 text-slate-700 hover:bg-slate-50 px-5 py-2.5 font-black text-xs rounded-lg transition-all shadow-sm flex items-center gap-2 whitespace-nowrap"
@@ -1038,6 +1346,40 @@ export default function MockInterviewsDashboard() {
                   </tbody>
                 </table>
               </div>
+
+              {filteredSessions.length > itemsPerPage && (
+                <div className="flex items-center justify-between px-8 py-6 bg-slate-50/50 border-t border-gray-100">
+                  <p className="text-sm font-medium text-slate-500">
+                    Showing <span className="font-bold text-slate-800">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="font-bold text-slate-800">{Math.min(currentPage * itemsPerPage, filteredSessions.length)}</span> of <span className="font-bold text-slate-800">{filteredSessions.length}</span> candidates
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => { setCurrentPage(p => Math.max(1, p - 1)); window.scrollTo(0, 0); }}
+                      disabled={currentPage === 1}
+                      className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                    >
+                      Previous
+                    </button>
+                    {[...Array(Math.ceil(filteredSessions.length / itemsPerPage))].map((_, i) => (
+                      <button
+                        key={i}
+                        onClick={() => { setCurrentPage(i + 1); window.scrollTo(0, 0); }}
+                        className={`w-9 h-9 rounded-lg text-sm font-bold transition-all ${currentPage === i + 1 ? 'bg-indigo-600 text-white shadow-md' : 'bg-white border border-gray-200 text-slate-600 hover:bg-slate-50'}`}
+                      >
+                        {i + 1}
+                      </button>
+                    ))}
+                    <button
+                      onClick={() => { setCurrentPage(p => Math.min(Math.ceil(filteredSessions.length / itemsPerPage), p + 1)); window.scrollTo(0, 0); }}
+                      disabled={currentPage === Math.ceil(filteredSessions.length / itemsPerPage)}
+                      className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
+              </>
             )}
           </div>
         ) : (
@@ -1046,7 +1388,6 @@ export default function MockInterviewsDashboard() {
               <h2 className="text-3xl font-black text-slate-800 mb-2">Configure Session</h2>
               <p className="text-gray-500 font-medium text-sm max-w-md mx-auto">Provide candidate details and context for the AI engine to generate dynamic questions.</p>
               
-              {/* Issue 1: Method Selector */}
               <div className="flex justify-center mt-8 gap-4">
                 <button 
                   onClick={() => setCreationMode('single')}
@@ -1090,6 +1431,42 @@ export default function MockInterviewsDashboard() {
                     </div>
                   </div>
 
+                  <div className="grid grid-cols-12 gap-3 bg-white/50 p-4 rounded-2xl border border-indigo-100/30">
+                    <div className="col-span-5">
+                      <input 
+                        type="text" 
+                        placeholder="Candidate Name" 
+                        value={manualName} 
+                        onChange={e => setManualName(e.target.value)} 
+                        className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-medium"
+                      />
+                    </div>
+                    <div className="col-span-5">
+                      <input 
+                        type="email" 
+                        placeholder="Candidate Email" 
+                        value={manualEmail} 
+                        onChange={e => setManualEmail(e.target.value)} 
+                        className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-medium"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          if (manualName && manualEmail) {
+                            setBulkCandidates(prev => [...prev, { name: manualName, email: manualEmail, record_video: recordVideo }]);
+                            setManualName('');
+                            setManualEmail('');
+                          }
+                        }}
+                        className="w-full h-full bg-indigo-100 text-indigo-600 hover:bg-indigo-600 hover:text-white rounded-xl flex items-center justify-center transition-all"
+                      >
+                        <Plus className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+
                   {bulkCandidates.length > 0 && (
                     <div className="mt-4 border-t border-indigo-100 pt-4">
                       <div className="flex justify-between items-center mb-4">
@@ -1106,7 +1483,22 @@ export default function MockInterviewsDashboard() {
                                 <p className="text-[10px] text-slate-400 font-medium">{c.email}</p>
                               </div>
                             </div>
-                            <Trash2 className="w-3.5 h-3.5 text-slate-300 hover:text-rose-500 cursor-pointer" onClick={() => setBulkCandidates(prev => prev.filter((_, idx) => idx !== i))} />
+                            <div className="flex items-center gap-3">
+                              <label className="flex items-center gap-1.5 cursor-pointer group">
+                                <span className="text-[9px] font-black text-slate-400 group-hover:text-indigo-500 uppercase">Video</span>
+                                <input 
+                                  type="checkbox" 
+                                  checked={c.record_video === true || c.record_video === 'true'} 
+                                  onChange={(e) => {
+                                    const newList = [...bulkCandidates];
+                                    newList[i].record_video = e.target.checked;
+                                    setBulkCandidates(newList);
+                                  }}
+                                  className="w-3.5 h-3.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                />
+                              </label>
+                              <Trash2 className="w-3.5 h-3.5 text-slate-300 hover:text-rose-500 cursor-pointer" onClick={() => setBulkCandidates(prev => prev.filter((_, idx) => idx !== i))} />
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -1170,7 +1562,29 @@ export default function MockInterviewsDashboard() {
                 </div>
               </div>
 
-              {/* Issue 3: Video Recording Option */}
+              <div className="bg-amber-50/50 p-5 rounded-2xl border border-amber-100 flex items-center gap-4">
+                <div className="p-2.5 bg-amber-100 rounded-xl">
+                  <Clock className="w-5 h-5 text-amber-600" />
+                </div>
+                <div className="flex-1">
+                  <label className="text-xs font-black text-amber-700 uppercase tracking-widest block mb-1.5">Interview Deadline</label>
+                  <p className="text-[10px] text-amber-500 font-medium mb-2">Candidate can complete the interview anytime before this date (end of day)</p>
+                  <input 
+                    type="date" 
+                    value={deadlineDate} 
+                    min={scheduledDate}
+                    onChange={e => setDeadlineDate(e.target.value)} 
+                    className="w-full max-w-xs px-4 py-2.5 bg-white border border-amber-200 focus:border-amber-500 focus:ring-2 focus:ring-amber-200 rounded-xl text-sm font-bold text-slate-700 transition-all" 
+                  />
+                </div>
+                {deadlineDate && scheduledDate && (
+                  <div className="text-right">
+                    <p className="text-2xl font-black text-amber-600">{Math.max(0, Math.ceil((new Date(deadlineDate) - new Date(scheduledDate)) / (1000 * 60 * 60 * 24)))}</p>
+                    <p className="text-[9px] font-black text-amber-400 uppercase tracking-widest">Days Window</p>
+                  </div>
+                )}
+              </div>
+
               <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 flex items-center justify-between group">
                 <div className="flex items-center gap-4">
                   <div className={`p-3 rounded-2xl transition-all ${recordVideo ? 'bg-indigo-500 text-white shadow-lg' : 'bg-white text-slate-400 border border-slate-100'}`}>
@@ -1182,14 +1596,15 @@ export default function MockInterviewsDashboard() {
                   </div>
                 </div>
                 <div 
-                  onClick={() => setRecordVideo(!recordVideo)}
+                  onClick={() => setRecordVideoForMode(!recordVideo)}
                   className={`w-14 h-8 rounded-full p-1 cursor-pointer transition-all flex items-center ${recordVideo ? 'bg-indigo-500' : 'bg-slate-200'}`}
                 >
                   <div className={`bg-white w-6 h-6 rounded-full shadow-sm transition-transform ${recordVideo ? 'translate-x-6' : 'translate-x-0'}`} />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
+              <div className={`grid ${creationMode === 'single' ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'} gap-6 items-stretch`}>
+                {creationMode === 'single' && (
                 <div className="flex flex-col">
                   <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-3 flex items-center gap-2">
                     <Download className="w-3.5 h-3.5 text-indigo-400" />
@@ -1217,6 +1632,7 @@ export default function MockInterviewsDashboard() {
                     </div>
                   </div>
                 </div>
+                )}
 
                 <div className="flex flex-col">
                   <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-3 flex justify-between">
@@ -1224,7 +1640,9 @@ export default function MockInterviewsDashboard() {
                       <Briefcase className="w-3.5 h-3.5 text-indigo-400" />
                       Job Description Text {!resumeFile && <span className="text-red-500">*</span>}
                     </span>
+                    {creationMode === 'single' && (
                     <span className="text-[10px] text-slate-400 font-black px-2 py-0.5 bg-slate-50 rounded italic whitespace-nowrap">OPTIONAL IF FILE IS ATTACHED</span>
+                    )}
                   </label>
                   <div className="relative flex-1">
                     <textarea 

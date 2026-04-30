@@ -100,6 +100,15 @@ const startServer = async () => {
   httpServer.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`🔌 Socket.IO with DB: ${mongoose.connection.db?.databaseName}`);
+    
+    // Check Brevo Config
+    const brevoKey = process.env.BREVO_API_KEY;
+    const brevoEmail = process.env.BREVO_SENDER_EMAIL;
+    if (brevoKey && brevoEmail) {
+      console.log(`📧 Brevo Email Service: READY (Sender: ${brevoEmail})`);
+    } else {
+      console.warn(`⚠️ Brevo Email Service: NOT CONFIGURED (Missing ${!brevoKey ? 'BREVO_API_KEY' : ''} ${!brevoEmail ? 'BREVO_SENDER_EMAIL' : ''})`);
+    }
   });
 };
 

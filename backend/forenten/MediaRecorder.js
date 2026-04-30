@@ -14,8 +14,8 @@ class VideoRecorder {
         if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             this.recognition = new SpeechRecognition();
-            // We use continuous = false and manual restart for better stability & control
-            this.recognition.continuous = false;
+            // USE CONTINUOUS = TRUE for better flow and fewer gaps
+            this.recognition.continuous = true;
             this.recognition.interimResults = true;
             this.recognition.lang = 'en-IN';
 
@@ -36,41 +36,41 @@ class VideoRecorder {
             };
 
             this.recognition.onresult = (event) => {
-                let finalChunk = '';
-                let interimChunk = '';
-
+                let finalTranscript = '';
+                let interimTranscript = '';
                 for (let i = event.resultIndex; i < event.results.length; ++i) {
-                    if (event.results[i].isFinal) {
-                        finalChunk += event.results[i][0].transcript;
-                    } else {
-                        interimChunk += event.results[i][0].transcript;
+                    const transcript = event.results[i][0].transcript;
+                    if (event.results[i].isFinal) finalTranscript += transcript;
+                    else interimTranscript += transcript;
+                }
+                if (finalTranscript) {
+                    const currentVal = this.transcriptionBox.value.trim();
+                    if (!currentVal.endsWith(finalTranscript.trim())) {
+                        this.transcriptionBox.value += (currentVal ? ' ' : '') + finalTranscript.trim() + ' ';
+                        this.transcriptionBox.scrollTop = this.transcriptionBox.scrollHeight;
+                        if (typeof window.updateBehavioralFromTranscript === 'function') {
+                            window.updateBehavioralFromTranscript(this.transcriptionBox.value);
+                        }
                     }
                 }
-
-                // 1. Update the MAIN TEXT AREA
-                if (finalChunk) {
-                    this.transcriptionBox.value += finalChunk + ' ';
-                    this.transcriptionBox.scrollTop = this.transcriptionBox.scrollHeight;
-                    // ── Behavioral tracking hook ──
-                    if (typeof window.updateBehavioralFromTranscript === 'function') {
-                        window.updateBehavioralFromTranscript(this.transcriptionBox.value);
-                    }
-                }
-
-                // 2. Update the STATUS DIV with interim text
-                if (interimChunk) {
-                    this.transcriptionDisplay.textContent = '... ' + interimChunk;
+                if (interimTranscript) {
+                    this.transcriptionDisplay.innerHTML = `<span style="color: #4f46e5; font-weight: 600;">🎤 ... ${interimTranscript}</span>`;
+                } else if (!finalTranscript) {
+                    this.transcriptionDisplay.textContent = "🎤 Listening...";
                 }
             };
 
             this.recognition.onerror = (event) => {
-                console.error("Speech error", event.error);
+                console.error("Speech Recognition Error:", event.error);
                 if (event.error === 'no-speech') {
-                    // Common, ignore. Loop will restart it.
+                    this.transcriptionDisplay.textContent = "🎤 Listening (Still active)...";
+                    return; 
+                }
+                if (event.error === 'aborted') {
+                    console.log("Speech recognition aborted. Will restart.");
                     return;
                 }
-                this.transcriptionDisplay.innerText = `Error: ${event.error}`;
-                // this.transcriptionBox.value += `[Debug: Error ${event.error}]\n`;
+                this.transcriptionDisplay.innerHTML = `<span style="color: #ef4444;">Error: ${event.error}</span>`;
             };
 
             this.recognition.nomatch = () => {

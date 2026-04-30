@@ -1,23 +1,60 @@
-async function sendBrevoEmail({ toEmail, toName, subject, htmlContent, attachment = [] }) {
+import PDFDocument from 'pdfkit';
+
+const isValidEmail = (value) =>
+  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
+
+const normalizeDecisionStatus = (decision) => {
+  const status = String(decision || "").trim().toLowerCase();
+  if (["selected", "accepted", "accept", "approved", "approve"].includes(status)) {
+    return "selected";
+  }
+  if (["rejected", "reject", "declined", "decline"].includes(status)) {
+    return "rejected";
+  }
+  return status;
+};
+
+const joinUrl = (baseUrl, pathUrl) => {
+  const cleanBase = String(baseUrl || "").replace(/\/+$/, "");
+  const cleanPath = String(pathUrl || "").startsWith("/") ? String(pathUrl || "") : `/${pathUrl || ""}`;
+  return `${cleanBase}${cleanPath}`;
+};
+
+const brevoResult = (ok, message, providerStatus = null, providerResponse = null) => ({
+  ok,
+  message,
+  providerStatus,
+  providerResponse
+});
+
+async function sendBrevoEmailDetailed({ toEmail, toName, subject, htmlContent, attachment = [] }) {
   const apiKey = process.env.BREVO_API_KEY;
   const senderName = process.env.BREVO_SENDER_NAME || "Arah Info Tech Pvt ltd";
   const senderEmail = process.env.BREVO_SENDER_EMAIL || "career.arahinfotech@gmail.com";
+  const recipientEmail = String(toEmail || '').trim();
+  const recipientName = String(toName || recipientEmail).trim();
 
   if (!apiKey || !senderEmail) {
-    console.error("[Brevo] CRITICAL: Missing API key or Sender Email.");
-    return false;
+    console.error("[Brevo] CRITICAL: Missing API key or Sender Email in .env");
+    return brevoResult(false, "Missing BREVO_API_KEY or BREVO_SENDER_EMAIL in backend .env");
   }
+
+  if (!isValidEmail(recipientEmail)) {
+    console.error(`[Brevo] Invalid recipient email: ${toEmail || '(empty)'}`);
+    return brevoResult(false, `Invalid recipient email: ${toEmail || '(empty)'}`);
+  }
+
+  console.log(`[Brevo] Preparing to send email to: ${recipientEmail} | Subject: ${subject}`);
 
   try {
     const payload = {
       sender: { name: senderName, email: senderEmail },
-      to: [{ email: toEmail, name: toName }],
+      to: [{ email: recipientEmail, name: recipientName }],
       subject,
       htmlContent,
       ...(attachment.length > 0 ? { attachment } : {})
     };
 
-    // Use AbortController for a 20-second timeout to prevent 2-minute hangs
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 20000);
 
@@ -36,22 +73,33 @@ async function sendBrevoEmail({ toEmail, toName, subject, htmlContent, attachmen
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      console.error(`[Brevo] API Error: ${response.status} ${response.statusText}`, JSON.stringify(errorData, null, 2));
-      return false;
+      console.error(`[Brevo] API REJECTION (${response.status}) for ${recipientEmail}:`, JSON.stringify(errorData, null, 2));
+      const providerMessage = errorData.message || errorData.code || response.statusText || "Brevo rejected the request";
+      return brevoResult(false, providerMessage, response.status, errorData);
     }
 
-    return true;
+    const resultData = await response.json().catch(() => ({}));
+    console.log(`[Brevo] Email DISPATCHED successfully to ${recipientEmail}. MessageID: ${resultData.messageId || 'N/A'}`);
+    return brevoResult(true, "Email dispatched successfully", response.status, resultData);
   } catch (error) {
     if (error.name === 'AbortError') {
-      console.error("[Brevo] Error: Request timed out after 20 seconds.");
+      console.error("[Brevo] TIMEOUT: Request took longer than 20s.");
+      return brevoResult(false, "Brevo request timed out after 20 seconds. Check your internet connection or Brevo API status.");
     } else {
-      console.error("[Brevo] Network/Fetch Error:", error.message);
+      console.error("[Brevo] EXCEPTION:", error.message);
+      let msg = error.message || "Brevo request failed";
+      if (msg.includes("fetch failed")) {
+        msg = "Network error: Failed to reach Brevo API. Check server internet access.";
+      }
+      return brevoResult(false, msg);
     }
-    return false;
   }
 }
 
-import PDFDocument from 'pdfkit';
+async function sendBrevoEmail(options) {
+  const result = await sendBrevoEmailDetailed(options);
+  return result.ok;
+}
 
 async function generatePdfBase64(text, title = "Job Description") {
   return new Promise((resolve, reject) => {
@@ -79,17 +127,16 @@ async function generatePdfBase64(text, title = "Job Description") {
   });
 }
 
-async function sendInterviewEmail({ candidateEmail, candidateName, linkUrl, duration, jobDescription, resumeText }) {
+async function buildInterviewEmail({ candidateEmail, candidateName, linkUrl, duration, jobDescription, resumeText, skipPdf = false, customBody = "" }) {
   const baseUrl = process.env.FRONTEND_URL || "http://localhost:5000";
+  const fullLink = baseUrl.startsWith("http") ? joinUrl(baseUrl, linkUrl) : joinUrl("http://localhost:5173", linkUrl);
   
   // Decide which text to use for the PDF
-  // If jobDescription is not "JD provided via attached file", use it.
-  // Otherwise, use resumeText (which contains the parsed PDF text).
   const isGenericJdStr = String(jobDescription || "").includes("JD provided via attached file");
   const finalJdText = isGenericJdStr ? (resumeText || jobDescription) : (jobDescription || resumeText);
   
   let attachments = [];
-  if (finalJdText) {
+  if (!skipPdf && finalJdText) {
     try {
       const base64 = await generatePdfBase64(finalJdText);
       attachments.push({
@@ -97,50 +144,93 @@ async function sendInterviewEmail({ candidateEmail, candidateName, linkUrl, dura
         name: "Job_Description.pdf"
       });
     } catch (err) {
-      console.error("[Email Service] PDF generation failed", err);
+      console.error("[EmailPDF] Generation failed:", err.message);
     }
   }
 
-  return sendBrevoEmail({
-    toEmail: candidateEmail,
-    toName: candidateName,
-    subject: "Interview Invitation by Arah",
-    attachment: attachments,
-    htmlContent: `
-      <html>
-      <body style="font-family: sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <div style="text-align: center; margin-bottom: 25px;">
-           <h1 style="color: #6366f1; margin-bottom: 5px;">Interview Invitation</h1>
-           <p style="color: #64748b; font-size: 1.1rem; margin-top: 0;">AI-Powered Assessment by <b>Arah</b></p>
-        </div>
+  // If customBody is provided from the frontend editor, wrap it in our shell
+  let htmlBody = "";
+  if (customBody) {
+     // Inject name and link into the custom body if placeholders exist
+     const hasLinkPlaceholder = String(customBody).includes("{link}");
+     let processedBody = customBody
+        .replace(/{name}/g, candidateName)
+        .replace(/{link}/g, fullLink)
+        .replace(/\n/g, '<br/>');
 
-        <div style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 25px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
-          <p>Dear <b>${candidateName}</b>,</p>
-          <p>We are excited to invite you to complete an AI-powered technical interview. This assessment will help us understand your skills and experience better.</p>
-          
-          <div style="margin: 20px 0; padding: 15px; background-color: #f8fafc; border-radius: 12px; border-left: 4px solid #6366f1;">
-            <p style="margin: 5px 0;"><b>Important:</b> We have attached the <b>Job Description PDF</b> to this email for your reference.</p>
-            <p style="margin: 5px 0;"><b>Interview Duration:</b> <span style="color: #6366f1; font-weight: bold;">${duration} minutes</span></p>
-          </div>
-
+     if (!hasLinkPlaceholder) {
+        processedBody += `
           <div style="text-align: center; margin: 30px 0;">
-            <a href="${baseUrl}${linkUrl}" style="background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); color: white; padding: 14px 35px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 1.1rem; box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.3);">
-              🚀 Start Interview Now
+            <a href="${fullLink}" style="background: #6366f1; color: white; padding: 12px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
+              Start Interview
             </a>
           </div>
+          <p style="font-size: 12px; color: #64748b; text-align: center;">If the button above doesn't work, copy and paste this link: <br/> ${fullLink}</p>
+        `;
+     }
 
-          <p style="font-size: 0.85rem; color: #94a3b8; text-align: center; border-top: 1px solid #f1f5f9; padding-top: 20px;">
-            <b>Important:</b> This invitation link is personal and will expire in <b>24 hours</b>.
-          </p>
+     htmlBody = `
+      <div style="font-family: sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);">
+        <div style="background-color: #6366f1; padding: 20px; text-align: center;">
+          <h1 style="color: white; margin: 0; font-size: 20px;">Interview Invitation</h1>
         </div>
+        <div style="padding: 30px;">
+          ${processedBody}
+        </div>
+        <div style="background-color: #f8fafc; padding: 20px; text-align: center; border-top: 1px solid #e2e8f0;">
+          <p style="margin: 0; font-size: 12px; color: #64748b;">© ${new Date().getFullYear()} Arah Info Tech. All rights reserved.</p>
+        </div>
+      </div>
+     `;
+  } else {
+    // Default template
+    htmlBody = `
+    <div style="font-family: sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);">
+      <div style="background-color: #6366f1; padding: 20px; text-align: center;">
+        <h1 style="color: white; margin: 0; font-size: 20px;">Interview Invitation</h1>
+      </div>
+      <div style="padding: 30px;">
+        <p>Dear <b>${candidateName}</b>,</p>
+        <p>We are excited to invite you to complete an AI-powered technical interview. This assessment will help us understand your skills and experience better.</p>
         
-        <p style="text-align: center; color: #64748b; font-size: 0.85rem; margin-top: 20px;">
-          Best of luck!<br/><b>Arah Recruitment Team</b>
-        </p>
-      </body>
-      </html>
-    `
-  });
+        <div style="margin: 20px 0; padding: 15px; background-color: #f8fafc; border-radius: 12px; border-left: 4px solid #6366f1;">
+          <p style="margin: 5px 0;"><b>Important:</b> A PDF reference is attached for your review.</p>
+          <p style="margin: 5px 0;"><b>Interview Duration:</b> <span style="color: #6366f1; font-weight: bold;">${duration} minutes</span></p>
+        </div>
+
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${fullLink}" style="background: #6366f1; color: white; padding: 12px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
+            🚀 Start Interview Now
+          </a>
+        </div>
+
+        <p style="font-size: 12px; color: #64748b; text-align: center;">If the button above doesn't work, copy and paste this link: <br/> ${fullLink}</p>
+        
+        <p>Best of luck!<br/><b>Arah Recruitment Team</b></p>
+      </div>
+      <div style="background-color: #f8fafc; padding: 20px; text-align: center; border-top: 1px solid #e2e8f0;">
+        <p style="margin: 0; font-size: 12px; color: #64748b;">© ${new Date().getFullYear()} Arah Info Tech. All rights reserved.</p>
+      </div>
+    </div>
+    `;
+  }
+
+  return {
+    toEmail: candidateEmail,
+    toName: candidateName,
+    subject: "Interview Invitation - Arah Info Tech",
+    htmlContent: htmlBody,
+    attachment: attachments
+  };
+}
+
+async function sendInterviewEmailDetailed(options) {
+  return sendBrevoEmailDetailed(await buildInterviewEmail(options));
+}
+
+async function sendInterviewEmail(options) {
+  const result = await sendInterviewEmailDetailed(options);
+  return result.ok;
 }
 
 async function sendOtpEmail({ email, name, otp }) {
@@ -163,11 +253,11 @@ async function sendOtpEmail({ email, name, otp }) {
   });
 }
 
-async function sendDecisionEmail({ email, name, decision, overallRecommendation, avgScore, strengths, weaknesses }) {
-  const status = String(decision || "").toLowerCase();
+function buildDecisionEmail({ email, name, decision, overallRecommendation, avgScore, strengths, weaknesses }) {
+  const status = normalizeDecisionStatus(decision);
   const subject =
     status === "selected"
-      ? "Interview Result - Invitation for next steps"
+      ? "Interview Result - Accepted for next steps"
       : "Application Status Update";
 
   const summaryHtml = `
@@ -222,17 +312,31 @@ async function sendDecisionEmail({ email, name, decision, overallRecommendation,
         </html>
       `;
 
-  return sendBrevoEmail({
+  return {
     toEmail: email,
     toName: name,
     subject,
     htmlContent
-  });
+  };
+}
+
+async function sendDecisionEmailDetailed(options) {
+  return sendBrevoEmailDetailed(buildDecisionEmail(options));
+}
+
+async function sendDecisionEmail(options) {
+  const result = await sendDecisionEmailDetailed(options);
+  return result.ok;
 }
 
 export { 
+  isValidEmail,
+  normalizeDecisionStatus,
   sendBrevoEmail,
+  sendBrevoEmailDetailed,
   sendDecisionEmail,
+  sendDecisionEmailDetailed,
   sendInterviewEmail,
+  sendInterviewEmailDetailed,
   sendOtpEmail
  };
